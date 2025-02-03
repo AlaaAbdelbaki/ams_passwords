@@ -1,1 +1,2 @@
-#AMS Projet\nPasswords generation
+#AMS Projet
+Passwords generation
