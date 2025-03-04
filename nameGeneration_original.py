@@ -176,7 +176,7 @@ def train(input_line_tensor, target_line_tensor):
 
     for i in range(input_line_tensor.size(0)):
         output, hidden = decoder(
-            input_line_tensor[i].to(device), hidden.to(device))
+            input_line_tensor[i].to(device), (hidden[0].to(device), hidden[1].to(device)))
         l = criterion(output.to(device), target_line_tensor[i].to(device))
         loss += l
 
@@ -253,39 +253,26 @@ class RNN(nn.Module):
         self.hidden_size = hidden_size
         self.n_layers = n_layers
 
-        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
-        self.i2o = nn.Linear(input_size + hidden_size, output_size)
-        self.o2o = nn.Linear(hidden_size + output_size, output_size)
+        self.lstm = nn.LSTM(input_size, hidden_size,
+                            n_layers, batch_first=True)
+        self.i2o = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(0.1)
         self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, input, hidden):
-        # print('---')
-        # print('input: ', input.size())
-        # print('hidden: ', hidden.size())
-        input_combined = torch.cat((input, hidden), 1)
-        hidden = self.i2h(input_combined)
-        output = self.i2o(input_combined)
-        output_combined = torch.cat((hidden, output), 1)
-        output = self.o2o(output_combined)
+        output, hidden = self.lstm(input.unsqueeze(0), hidden)
+        output = self.i2o(output[:, -1, :])
         output = self.dropout(output)
         output = self.softmax(output)
-
-        # print('output: ', output.size())$
-        # input:  torch.Size([1, 59])
-        # hidden:  torch.Size([1, 128])
-        # output:  torch.Size([1, 59])
-
         return output, hidden
 
     def init_hidden(self):
-        return torch.zeros(1, self.hidden_size)
-
-    # return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
+        return (torch.zeros(self.n_layers, 1, self.hidden_size),
+                torch.zeros(self.n_layers, 1, self.hidden_size))
 
     def init_hidden_random(self):
-        return torch.rand(1, self.hidden_size)
-    # return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
+        return (torch.rand(self.n_layers, 1, self.hidden_size),
+                torch.rand(self.n_layers, 1, self.hidden_size))
 
 
 def training(n_epochs, lines):
@@ -306,9 +293,7 @@ def training(n_epochs, lines):
 
     for iter in range(1, n_epochs + 1):
         total_loss = 0
-        # Pick 10 random training examples
-        randomLines = [line for line in random.sample(lines, 10)]
-        for index, line in enumerate(randomLines, start=1):
+        for index, line in enumerate(lines, start=1):
             output, loss = train(input_line_tensor=inputTensor(
                 line), target_line_tensor=targetTensor(line))
             total_loss += loss
@@ -383,7 +368,7 @@ def sample(decoder, start_letters='ABC'):
                 input = inputTensor(start_letters[i])
                 # print(start_letters[i], ' ', hidden)
                 output, hidden = decoder(
-                    input[0].to(device), hidden.to(device))
+                    input[0].to(device), (hidden[0].to(device), hidden[1].to(device)))
 
             topv, topi = output.topk(1)
             topi = topi[0][0]
@@ -398,7 +383,8 @@ def sample(decoder, start_letters='ABC'):
         output_name = start_letters
 
         for i in range(max_length):
-            output, hidden = decoder(input[0].to(device), hidden.to(device))
+            output, hidden = decoder(input[0].to(
+                device), (hidden[0].to(device), hidden[1].to(device)))
             topv, topi = output.topk(1)
             topi = topi[0][0]
             if topi == n_letters - 1:
@@ -491,23 +477,22 @@ def evaluating(decoder):
 
     try:
         while True:
-            # print('Enter a starting two or tree charachters but less than ',
-            #       (2 * max_length), ' charachters: ')
-            # starting_letters = input()
+            print('Enter a starting two or tree charachters but less than ',
+                  (2 * max_length), ' charachters: ')
+            starting_letters = input()
 
-            # print()
+            print()
 
             num_predictions = int(input("Enter the number of predictions: "))
 
-            # if len(starting_letters) > 0 and len(starting_letters) < (2 * max_length):
-            # print('Generated up to ', max_length, 'charcaters: for ',
-            #       num_predictions, ' predictions')
-            for i in range(num_predictions):
-                starting_letters = random.choice(all_letters)
-                predicted = sample(decoder, starting_letters)
-                print(predicted)
-            # else:
-            #     print(starting_letters, ' length < 1 or > ', (2 * max_length))
+            if len(starting_letters) > 0 and len(starting_letters) < (2 * max_length):
+                print('Generated up to ', max_length, 'charcaters: for ',
+                      num_predictions, ' predictions')
+                for i in range(num_predictions):
+                    predicted = sample(decoder, starting_letters)
+                    print(predicted)
+            else:
+                print(starting_letters, ' length < 1 or > ', (2 * max_length))
             print('------------')
             print()
 
