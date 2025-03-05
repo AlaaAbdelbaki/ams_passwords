@@ -305,17 +305,24 @@ def training(n_epochs, lines):
     print_every = n_epochs / 100
 
     for iter in range(1, n_epochs + 1):
-        total_loss = 0
+        # total_loss = 0
         # Pick 10 random training examples
-        randomLines = [line for line in random.sample(lines, 10)]
-        for index, line in enumerate(randomLines, start=1):
-            output, loss = train(input_line_tensor=inputTensor(
-                line), target_line_tensor=targetTensor(line))
-            total_loss += loss
+        # randomLines = [line for line in random.sample(lines, 10)]
+        # for index, line in enumerate(randomLines, start=1):
+        line = randomTraining(lines)
+        output, loss = train(input_line_tensor=inputTensor(
+            line), target_line_tensor=targetTensor(line))
+        total_loss += loss
+        all_losses.append(loss)
+        if loss < best_loss:
+            path = modelPath.split('/')[0] + '/best_' + modelPath.split('/')[1]
+            print(f"New best loss: {loss}, saving model @ {path}...")
+            best_loss = loss
+            torch.save(decoder, path)
 
-            # if index % print_every == 0:
+        if iter % print_every == 0:
             print('%s (%d %d%%) %.4f (%.4f) current index = %s' % (timeSince(start),
-                                                                   iter, iter / n_epochs * 100, total_loss / index, loss, index))
+                                                                   iter, iter / n_epochs * 100, total_loss / iter, loss, iter))
 
         writer.add_scalar('Loss/train', total_loss/len(lines), iter)
     writer.close()
@@ -554,6 +561,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', default=.001, type=float)
     parser.add_argument('-p', '--percent', default=15, type=float,
                         help="percent (number between 1 and 100) of the total names to find (test) [default 15%]")
+    parser.add_argument("--best", default=False, type=bool,)
     #
     args = parser.parse_args()
     #
@@ -618,6 +626,9 @@ if __name__ == '__main__':
     # EVAL  #
     #########
     elif args.trainEval == 'eval':
+        if args.best:
+            modelPath = modelPath.split(
+                '/')[0] + '/best_' + modelPath.split('/')[1]
         decoder.eval()
         decoder = torch.load(modelPath, weights_only=False)
         decoder.eval().to(device)
@@ -626,6 +637,9 @@ if __name__ == '__main__':
     # TEST  #
     #########
     elif args.trainEval == 'test':
+        if args.best:
+            modelPath = modelPath.split(
+                '/')[0] + '/best_' + modelPath.split('/')[1]
         decoder.eval()
         decoder = torch.load(modelPath, weights_only=False)
         decoder.eval().to(device)

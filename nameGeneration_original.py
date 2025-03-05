@@ -77,7 +77,6 @@ def getLines(f):
 
 def split(rate, lines):
     names = []
-
     # for letter in string.ascii_uppercase:
     for letter in string.ascii_letters:
         names_letter = []
@@ -254,7 +253,7 @@ class RNN(nn.Module):
         self.n_layers = n_layers
 
         self.lstm = nn.LSTM(input_size, hidden_size,
-                            n_layers, batch_first=True)
+                            n_layers, batch_first=True, bidirectional=True)
         self.i2o = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(0.1)
         self.softmax = nn.LogSoftmax(dim=1)
