@@ -88,11 +88,11 @@ all_data = NamesDataset('data/names')
 # print(f"example: {all_data[0]}")
 
 
-train_set, test_set = torch.utils.data.random_split(
-    all_data, [.85, .15], generator=torch.Generator(device=device).manual_seed(2024))
+train_set, test_set, dev_set = torch.utils.data.random_split(
+    all_data, [.80, .10, .10], generator=torch.Generator(device=device).manual_seed(2024))
 
 print(
-    f"train examples: {len(train_set)}, validation examples: {len(test_set)}")
+    f"train examples: {len(train_set)}, validation examples: {len(test_set)}, dev examples: {len(dev_set)}")
 
 
 class CharRNN(nn.Module):

@@ -58,31 +58,29 @@ def avgNameLength(lines: list[str]) -> float:
     return sum(len(line.strip()) for line in lines) / len(lines)
 
 
-def split_data(path: str) -> None:
+def split_data(rate: float, lines: list[str]) -> tuple[list[str], list[str], list[str]]:
     """
     Split the data into training and testing sets.
     """
-    # Read the file
-    file = open(path, 'r')
-    # Remove duplicates
 
-    lines = file.readlines()
-    # Remove duplicates
     lines = list(set(lines))
+    dev_test_rate = (1 - rate) / 2
     train, test, dev = torch.utils.data.random_split(
-        lines, [.8, .1, .1])
+        lines, [rate, dev_test_rate, dev_test_rate])
 
     train_file = open('Dataset/train.txt', 'w')
     test_file = open('Dataset/test.txt', 'w')
     dev_file = open('Dataset/dev.txt', 'w')
 
-    train_file.writelines(train)
-    test_file.writelines(test)
-    dev_file.writelines(dev)
+    train_file.writelines(l for l in train if len(l) > 0)
+    test_file.writelines(l for l in test if len(l) > 0)
+    dev_file.writelines(l for l in dev if len(l) > 0)
 
     train_file.close()
     test_file.close()
     dev_file.close()
+
+    return list(train), list(test), list(dev)
 
 
 def dataset_info(path: str) -> None:
@@ -91,7 +89,7 @@ def dataset_info(path: str) -> None:
     """
     # Read the file
     with open(path, 'r') as file:
-        lines = file.readlines()
+        lines = list(set(file.readlines()))
 
     lines_longer_than_8 = []
     lines_with_special = []
@@ -108,16 +106,17 @@ def dataset_info(path: str) -> None:
     for line in lines:
         # Remove the newline character
         line = line.strip()
-        if min_length(8, line):
-            lines_longer_than_8.append(line)
-        if has_special_character(line):
-            lines_with_special.append(line)
-        if has_number(line):
-            lines_with_numbers.append(line)
-        if has_uppercase(line):
-            lines_with_uppercase.append(line)
-        if has_lowercase(line):
-            lines_with_lowercase.append(line)
+        if len(line) > 0:
+            if min_length(8, line):
+                lines_longer_than_8.append(line)
+            if has_special_character(line):
+                lines_with_special.append(line)
+            if has_number(line):
+                lines_with_numbers.append(line)
+            if has_uppercase(line):
+                lines_with_uppercase.append(line)
+            if has_lowercase(line):
+                lines_with_lowercase.append(line)
     total_lines = len(lines)
 
     avg_name_length = avgNameLength(lines)
@@ -142,4 +141,3 @@ def dataset_info(path: str) -> None:
 
 if __name__ == '__main__':
     dataset_info('Dataset/all.txt')
-    split_data('Dataset/all.txt')
