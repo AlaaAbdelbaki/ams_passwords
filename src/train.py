@@ -90,7 +90,7 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
     # Iterate through the input sequence
     for i in range(input_line_tensor.size(0)):
         output, hidden = decoder(input_line_tensor[i], hidden)
-        l = criteron(output, target_line_tensor[i])
+        l = criteron(output, target_line_tensor[i].to(device))
         loss += l
 
     loss.backward()
