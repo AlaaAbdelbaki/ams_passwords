@@ -8,7 +8,6 @@ from os import makedirs, path
 import torch
 import torch.nn as nn
 import unidecode
-from torchsummary import summary
 
 from dataset_info import dataset_info, split_data
 from src import (FILENAME, MODEL_PATH, device, hidden_size_default, l_r,
@@ -83,23 +82,31 @@ def main():
     dataset_info(FILENAME)
 
     lines = get_lines(FILENAME)
+
+    # Split dataset
     train_set, test_set, dev_set = split_data(args.s, lines)
 
     logging.info(f"Training set size: {len(train_set)}")
     logging.info(f"Test set size: {len(test_set)}")
     logging.info(f"Dev set size: {len(dev_set)}")
 
+    # Hyperparameters
     max_length = args.ml if args.ml > 0 else get_mean_size(train_set)
     learning_rate = args.learning_rate if args.learning_rate is not None else l_r
     hidden_size = (
-        args.hidden_size if args.hidden_size is not None else hidden_size_default
-    )
+        args.hidden_size if args.hidden_size is not None else hidden_size_default)
     n_layers = args.num_layers if args.num_layers is not None else n_layers_default
     max_epochs = args.max_epochs if args.max_epochs is not None else max_epochs_default
 
-    decoder = RNN(n_letters, hidden_size, n_letters, n_layers).to(device)
+    print("--------------------------------------------------------------------")
 
-    model_filename = f"{args.run}_{n_layers}_{hidden_size}_{learning_rate:.4f}_{max_epochs}.pt"
+    # Initialize the Model (decoder)
+    decoder = RNN(n_letters, hidden_size, n_letters, n_layers).to(device)
+    decoder.summary(n_letters, hidden_size, n_letters, n_layers)
+
+    model_filename = (
+        f"{args.run}_{n_layers}_{hidden_size}_{learning_rate:.4f}_{max_epochs}.pt"
+    )
     model_path = path.join(path.dirname(args.model), model_filename)
 
     makedirs(path.dirname(model_path), exist_ok=True)

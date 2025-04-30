@@ -22,6 +22,7 @@ The input tensor helps the model understand what it’s supposed to process (the
 The target tensor represents what the model should output after processing the input (the expected next characters).
 These tensors work together to train the model in sequence-based tasks."""
 import torch
+
 from src import all_letters, n_letters
 
 
@@ -37,9 +38,12 @@ def input_tensor(line):
                         Each character in the input string is encoded as a one-hot vector with length `n_letters`.
     """
     tensor = torch.zeros(len(line), 1, n_letters)  # .long()
+    # print(f"Encoding line: {line}")
     for li in range(len(line)):
         letter = line[li]
         tensor[li][0][all_letters.find(letter)] = 1
+    if len(tensor[0]) == 0:
+        print(f"Error: tensor[0] is empty: {line}")
     return tensor
 
 
@@ -48,10 +52,10 @@ def target_tensor(line):
     """
     Converts a string (line) into a tensor representing the target sequence for training.
     The target sequence is created by shifting the input string by one character, with the End-Of-Sequence (EOS) token added at the end.
-    
+
     Args:
     - line (str): The input string that needs to be converted into a target tensor.
-    
+
     Returns:
     - tensor (Tensor): A LongTensor representing the target sequence. Each element in the tensor is the index of the corresponding character in `all_letters`.
                         The EOS token is represented by `n_letters - 1`.

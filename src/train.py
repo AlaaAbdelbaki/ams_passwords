@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+from math import inf
 
 import torch
 import torch.nn as nn
@@ -8,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from src import device, n_letters
 from src.preprocessing import input_tensor, target_tensor
-from src.Utils import time_since
+from src.Utils import all_letters, time_since
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -85,7 +86,8 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
     hidden = decoder.init_hidden().to(device)
 
     decoder.zero_grad()
-    loss = 0
+    loss = torch.tensor(0.0, requires_grad=True).to(device)
+    output = None
 
     # Iterate through the input sequence
     for i in range(input_line_tensor.size(0)):
@@ -95,6 +97,15 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
 
     loss.backward()
     optimizer.step()
-
-    return output, loss.item() / input_line_tensor.size(0)
+    try:
+        loss_calculation = loss.item() / input_line_tensor.size(0)
+    except Exception as e:
+        print(input_line_tensor)
+        # Convert input line tensor to characters
+        input_line = ''.join([all_letters[i]
+                             for i in input_line_tensor.squeeze().tolist()])
+        logging.error(f"Error in loss calculation: {e}")
+        logging.error(f"Line in question: {input_line}")
+        loss_calculation = inf
+    return output, loss_calculation
     # return output, loss.item() / input_line_tensor.size(0)

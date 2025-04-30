@@ -4,3 +4,6 @@ passwordEnv/*
 models/
 logs/
 runs/*
+Dataset/*
+__pycache__/*
+.vscode/*

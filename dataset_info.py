@@ -1,8 +1,13 @@
+import json
+import os
+from typing import Dict, List, Tuple
 
 import torch
 
+from src.Utils import unicode_to_ascii
 
-def letter_frequency(lines: list[str]) -> dict[str, int]:
+
+def letter_frequency(lines: List[str]) -> Dict[str, int]:
     """
     Calculate the frequency of each letter in the dataset.
     """
@@ -13,6 +18,8 @@ def letter_frequency(lines: list[str]) -> dict[str, int]:
                 freq[letter] += 1
             else:
                 freq[letter] = 1
+    # Sort the dictionary by keys
+    freq = dict(sorted(freq.items()))
     return freq
 
 
@@ -51,17 +58,34 @@ def has_lowercase(line: str) -> bool:
     return any(c.islower() for c in line)
 
 
-def avgNameLength(lines: list[str]) -> float:
+def avgNameLength(lines: List[str]) -> float:
     """
     Calculate the average name length.
     """
     return sum(len(line.strip()) for line in lines) / len(lines)
 
 
-def split_data(rate: float, lines: list[str]) -> tuple[list[str], list[str], list[str]]:
+def split_data(rate: float, lines: List[str]) -> Tuple[List[str], List[str], List[str]]:
     """
     Split the data into training and testing sets.
     """
+
+    if os.path.exists('Dataset/train.txt') and os.path.exists('Dataset/test.txt') and os.path.exists('Dataset/dev.txt'):
+        print("Dataset already split. Skipping split.")
+
+        train_file = open('Dataset/train.txt', 'r')
+        test_file = open('Dataset/test.txt', 'r')
+        dev_file = open('Dataset/dev.txt', 'r')
+
+        train_values = set(l for l in train_file.readlines())
+        test_values = set(l for l in test_file.readlines())
+        dev_values = set(l for l in dev_file.readlines())
+
+        train_file.close()
+        test_file.close()
+        dev_file.close()
+
+        return train_values, test_values, dev_values
 
     lines = list(set(lines))
     dev_test_rate = (1 - rate) / 2
@@ -72,15 +96,22 @@ def split_data(rate: float, lines: list[str]) -> tuple[list[str], list[str], lis
     test_file = open('Dataset/test.txt', 'w')
     dev_file = open('Dataset/dev.txt', 'w')
 
-    train_file.writelines(l for l in train if len(l) > 0)
-    test_file.writelines(l for l in test if len(l) > 0)
-    dev_file.writelines(l for l in dev if len(l) > 0)
+    train_values = set([unicode_to_ascii(l)
+                       for l in train if len(unicode_to_ascii(l)) > 0])
+    test_values = set([unicode_to_ascii(l)
+                      for l in test if len(unicode_to_ascii(l)) > 0])
+    dev_values = set([unicode_to_ascii(l)
+                     for l in dev if len(unicode_to_ascii(l)) > 0])
+
+    train_file.writelines(l for l in train_values)
+    test_file.writelines(l for l in test_values)
+    dev_file.writelines(l for l in dev_values)
 
     train_file.close()
     test_file.close()
     dev_file.close()
 
-    return list(train), list(test), list(dev)
+    return train_values, test_values, dev_values
 
 
 def dataset_info(path: str) -> None:
@@ -91,6 +122,8 @@ def dataset_info(path: str) -> None:
     with open(path, 'r') as file:
         lines = list(set(file.readlines()))
 
+    split_data(0.7, lines)
+
     lines_longer_than_8 = []
     lines_with_special = []
     lines_with_numbers = []
@@ -99,9 +132,9 @@ def dataset_info(path: str) -> None:
 
     print(f"File lines: {len(lines)}")
 
-    json = open("Dataset/letter_frequency.json", "w")
-    json.write(str(letter_frequency(lines)))
-    json.close()
+    jsonFile = open("Dataset/letter_frequency.json", "w")
+    jsonFile.write(json.dumps(letter_frequency(lines)))
+    jsonFile.close()
 
     for line in lines:
         # Remove the newline character
