@@ -211,6 +211,7 @@ class LSTMModel(nn.Module):
                          self.hidden_dim).to(device)
         c0 = torch.zeros(self.layer_dim, batch_size,
                          self.hidden_dim).to(device)
+        return (h0, c0)
 
     def init_hidden_random(self, batch_size):
         h0 = torch.rand(self.layer_dim, batch_size,

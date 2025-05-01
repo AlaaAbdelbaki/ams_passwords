@@ -8,7 +8,7 @@ FILENAME_TRAIN = r"Dataset/train.txt"
 FILENAME_TEST = r"Dataset/test.txt"
 MODEL_PATH = r"models/model_trained.pth"
 
-all_letters = string.printable
+all_letters = string.digits + string.ascii_letters + string.punctuation + '\n' + ' '
 # all_letters = string.ascii_letters + \
 #     " \.\,\;\'\-\(\)\[\]\@\*\$\#\%\!\^\<\>\/\\" + "0123456789"
 n_letters = len(all_letters) + 1    # Plus EOS marker
