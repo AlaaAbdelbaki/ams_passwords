@@ -22,7 +22,7 @@ def testing(decoder, nb_samples, lineTest, percent, max_length):
         Info-level logs include progress, accuracy, and completion details of the testing process.
     """
     logging.info("\n------------\n|   TEST   |\n------------")
-    
+
     start = time.time()
     accuracy = 0
     predicted = "a"
@@ -30,11 +30,9 @@ def testing(decoder, nb_samples, lineTest, percent, max_length):
 
     if nb_samples > 0:
         logging.info(f"Testing with {nb_samples} samples...")
-        
-        for i in range(1, nb_samples + 1):
-            nc = 1  # Adjusted size for starting letters (can be randomized)
 
-            # Ensure unique predictions
+        for i in range(1, nb_samples + 1):
+            nc = 1
             while predicted in predicted_current:
                 starting_letters = "".join(random.choice(string.ascii_uppercase) for _ in range(nc))
                 predicted = sample(decoder, max_length, starting_letters).lower()
@@ -48,8 +46,8 @@ def testing(decoder, nb_samples, lineTest, percent, max_length):
                 total=nb_samples, acc=accuracy, start=start, epoch=i, l=len(lineTest)
             )
 
-        accuracy = 100 * accuracy / nb_samples
-        logging.info(f"Accuracy: {accuracy}%")
+        accuracy_percent = 100 * accuracy / nb_samples
+        logging.info(f"Accuracy: {accuracy_percent:.2f}% ({accuracy}/{nb_samples})")
 
     else:
         logging.info("Testing with a percentage-based approach...")
@@ -74,4 +72,6 @@ def testing(decoder, nb_samples, lineTest, percent, max_length):
                 totalNames=l, start=start, names=accuracy, p=percent, samplesGenerated=i
             )
 
-        logging.info(f"{percent}% of all names ({len(lineTest)}) reached in {i} iterations ({time_since_start(start)} s)...")
+        accuracy_percent = 100 * accuracy / l
+        logging.info(f"{percent}% of all names ({l}) reached in {i} iterations ({time_since_start(start)} s)...")
+        logging.info(f"Final Accuracy: {accuracy_percent:.2f}% ({accuracy}/{l})")

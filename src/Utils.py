@@ -3,9 +3,7 @@ import string
 import sys
 import time
 import unicodedata
-
 import torch
-
 from src import FILENAME_TEST, FILENAME_TRAIN, all_letters, device, n_letters
 from src.preprocessing import input_tensor
 
@@ -113,17 +111,16 @@ def get_mean_size(listData):
     return int(mean / len(listData))
 
 
-def sample(decoder, max_length, start_letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+def sample(decoder, max_length, start_letters="ABC"):
     with torch.no_grad():  # no need to track history in sampling
 
-        hidden = decoder.init_hidden_random(len(start_letters))
+        hidden = decoder.init_hidden_random()
 
         if len(start_letters) > 1:
             for i in range(len(start_letters)):
                 input = input_tensor(start_letters[i])
                 # print(start_letters[i], ' ', hidden)
-                output, hidden = decoder(
-                    input[0].to(device).unsqueeze(0), hidden)
+                output, hidden = decoder(input[0].to(device), hidden.to(device))
 
             topv, topi = output.topk(1)
             topi = topi[0][0]
@@ -138,7 +135,7 @@ def sample(decoder, max_length, start_letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
         output_name = start_letters
 
         for i in range(max_length):
-            output, hidden = decoder(input[0].to(device).unsqueeze(0), hidden)
+            output, hidden = decoder(input[0].to(device), hidden.to(device))
             topv, topi = output.topk(1)
             topi = topi[0][0]
             if topi == n_letters - 1:
