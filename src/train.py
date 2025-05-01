@@ -83,7 +83,7 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
     """
     target_line_tensor = target_line_tensor.unsqueeze(
         -1)  # Reshape target tensor for loss computation
-    hidden = decoder.init_hidden().to(device)
+    hidden = decoder.init_hidden(target_line_tensor[0].size(0))
 
     decoder.zero_grad()
     loss = torch.tensor(0.0, requires_grad=True).to(device)
@@ -91,7 +91,7 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
 
     # Iterate through the input sequence
     for i in range(input_line_tensor.size(0)):
-        output, hidden = decoder(input_line_tensor[i], hidden)
+        output, hidden = decoder(input_line_tensor[i].unsqueeze(0), hidden)
         l = criteron(output, target_line_tensor[i].to(device))
         loss += l
 

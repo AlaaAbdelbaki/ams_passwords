@@ -13,7 +13,7 @@ from dataset_info import dataset_info, split_data
 from src import (FILENAME, MODEL_PATH, device, hidden_size_default, l_r,
                  max_epochs_default, n_layers_default, n_letters)
 from src.eval import evaluating
-from src.model import RNN
+from src.model import RNN, LSTMModel
 from src.test import testing
 from src.train import training
 from src.Utils import get_lines, get_mean_size, split
@@ -101,7 +101,8 @@ def main():
     print("--------------------------------------------------------------------")
 
     # Initialize the Model (decoder)
-    decoder = RNN(n_letters, hidden_size, n_letters, n_layers).to(device)
+    # decoder = RNN(n_letters, hidden_size, n_letters, n_layers).to(device)
+    decoder = LSTMModel(n_letters, hidden_size, n_layers, n_letters).to(device)
     decoder.summary(n_letters, hidden_size, n_letters, n_layers)
 
     model_filename = (

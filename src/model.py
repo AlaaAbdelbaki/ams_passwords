@@ -191,39 +191,67 @@ class RNN(nn.Module):
         print(model_summary)
 
 
-class LSTM(nn.Module):
-    def __init(self, input_size: int, hidden_size: int, num_layers: int, bias: bool = True, batch_first: bool = False, droupout: float = 0, bidirectional: bool = False, proj_size: int = 0):
-        super(LSTM, self).__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bias = bias
-        self.batch_first = batch_first
-        self.dropout = droupout
-        self.bidirectional = bidirectional
-        self.proj_size = proj_size
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers,
-                            bias, batch_first, droupout, bidirectional, proj_size)
-        self.softmax = nn.LogSoftmax(dim=1)
-        self.dropout = nn.Dropout(droupout)
-        self.embedding = nn.Embedding(
-            num_embeddings=input_size, embedding_dim=hidden_size)
+class LSTMModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
+        super(LSTMModel, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.layer_dim = layer_dim
+        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, input, hidden):
-        input = self.embedding(input)
+    def forward(self, x, hidden):
+        (h0, c0) = hidden
 
-        output, hidden = self.lstm(input, hidden)
-        output = self.softmax(output)
+        out, (hn, cn) = self.lstm(x, (h0, c0))
+        out = self.fc(out[:, -1, :])
+        return out, (hn, cn)
 
-        output = self.dropout(output)
-        return output, hidden
+    def init_hidden(self, batch_size):
+        h0 = torch.zeros(self.layer_dim, batch_size,
+                         self.hidden_dim).to(device)
+        c0 = torch.zeros(self.layer_dim, batch_size,
+                         self.hidden_dim).to(device)
 
-        pass
+    def init_hidden_random(self, batch_size):
+        h0 = torch.rand(self.layer_dim, batch_size,
+                        self.hidden_dim).to(device)
+        c0 = torch.rand(self.layer_dim, batch_size,
+                        self.hidden_dim).to(device)
+        return (h0, c0)
 
-    def init_hidden(self, batch_size: int):
-        hx = torch.zeros(self.num_layers, batch_size, self.hidden_size)
-        cx = torch.zeros(self.num_layers, batch_size, self.hidden_size)
-        if self.bidirectional:
-            hx = torch.cat((hx, hx), dim=2)
-            cx = torch.cat((cx, cx), dim=2)
-        return hx, cx
+    def summary(self, input_size, hidden_size, output_size, seq_len):
+        """
+        Prints a summary of the LSTM model architecture.
+
+        Args:
+            input_size (int): The number of input features.
+            hidden_size (int): The number of features in the hidden state.
+            output_size (int): The number of output features.
+            seq_len (int): The length of the input sequence.
+        """
+        model_summary = f"LSTM Model Summary\n"
+        model_summary += f"{'Layer':<20}{'Input Shape':<25}{'Output Shape':<25}{'Param #'}\n"
+        model_summary += "=" * 80 + "\n"
+
+        total_params = 0
+
+        # LSTM Layer
+        # (batch_size, seq_len, input_size)
+        lstm_input_shape = (None, seq_len, input_size)
+        # (batch_size, seq_len, hidden_size)
+        lstm_output_shape = (None, seq_len, hidden_size)
+        lstm_params = (4 * hidden_size * (input_size +
+                       hidden_size + 1)) * self.layer_dim
+        total_params += lstm_params
+        model_summary += f"{'LSTM':<20}{str(lstm_input_shape):<25}{str(lstm_output_shape):<25}{lstm_params}\n"
+
+        # Fully Connected Layer
+        fc_input_shape = (None, hidden_size)  # (batch_size, hidden_size)
+        fc_output_shape = (None, output_size)  # (batch_size, output_size)
+        fc_params = hidden_size * output_size + output_size  # Weights + Bias
+        total_params += fc_params
+        model_summary += f"{'Fully Connected':<20}{str(fc_input_shape):<25}{str(fc_output_shape):<25}{fc_params}\n"
+
+        model_summary += "=" * 80 + \
+            f"\nTotal Trainable Params: {total_params}\n"
+        print(model_summary)
