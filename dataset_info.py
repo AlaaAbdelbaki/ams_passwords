@@ -1,5 +1,6 @@
 import json
 import os
+import random
 from typing import Dict, List, Tuple
 
 import torch
@@ -65,53 +66,55 @@ def avgNameLength(lines: List[str]) -> float:
     return sum(len(line.strip()) for line in lines) / len(lines)
 
 
-def split_data(rate: float, lines: List[str]) -> Tuple[List[str], List[str], List[str]]:
+def split_data(rate: float, lines: List[str], seed: int = 42) -> Tuple[List[str], List[str], List[str]]:
     """
-    Split the data into training and testing sets.
+    Split data into train, test, and dev sets with reproducibility.
+
+    Args:
+        rate (float): Proportion of training data (0 < rate < 1).
+        lines (List[str]): Input lines.
+        seed (int): Random seed for reproducibility.
+
+    Returns:
+        Tuple[List[str], List[str], List[str]]: Train, test, and dev sets.
     """
+    assert 0 < rate < 1, "Training rate must be between 0 and 1"
 
-    if os.path.exists('Dataset/train.txt') and os.path.exists('Dataset/test.txt') and os.path.exists('Dataset/dev.txt'):
-        print("Dataset already split. Skipping split.")
+    os.makedirs('Dataset', exist_ok=True)
+    train_path = 'Dataset/train.txt'
+    dev_path = 'Dataset/dev.txt'
+    test_path = 'Dataset/test.txt'
 
-        train_file = open('Dataset/train.txt', 'r')
-        test_file = open('Dataset/test.txt', 'r')
-        dev_file = open('Dataset/dev.txt', 'r')
+    if os.path.exists(train_path) and os.path.exists(dev_path) and os.path.exists(test_path):
+        with open(train_path, 'r') as f:
+            train = [line.strip() for line in f]
 
-        train_values = set(l for l in train_file.readlines())
-        test_values = set(l for l in test_file.readlines())
-        dev_values = set(l for l in dev_file.readlines())
+        with open(dev_path, 'r') as f:
+            dev = [line.strip() for line in f]
 
-        train_file.close()
-        test_file.close()
-        dev_file.close()
+        with open(test_path, 'r') as f:
+            test = [line.strip() for line in f]
+        return train, test, dev
 
-        return train_values, test_values, dev_values
+    passwords = list(set(lines))
+    passwords = [p for p in passwords if p.strip()]  # keep newline, skip blank
 
-    lines = list(set(lines))
-    dev_test_rate = (1 - rate) / 2
-    train, test, dev = torch.utils.data.random_split(
-        lines, [rate, dev_test_rate, dev_test_rate])
+    random.seed(seed)
+    random.shuffle(passwords)
 
-    train_file = open('Dataset/train.txt', 'w')
-    test_file = open('Dataset/test.txt', 'w')
-    dev_file = open('Dataset/dev.txt', 'w')
+    n_total = len(passwords)
+    n_train = int(n_total * rate)
+    n_dev = n_test = (n_total - n_train) // 2
 
-    train_values = set([unicode_to_ascii(l)
-                       for l in train if len(unicode_to_ascii(l)) > 0])
-    test_values = set([unicode_to_ascii(l)
-                      for l in test if len(unicode_to_ascii(l)) > 0])
-    dev_values = set([unicode_to_ascii(l)
-                     for l in dev if len(unicode_to_ascii(l)) > 0])
+    train = passwords[:n_train]
+    dev = passwords[n_train:n_train + n_dev]
+    test = passwords[n_train + n_test:]
 
-    train_file.writelines(l for l in train_values)
-    test_file.writelines(l for l in test_values)
-    dev_file.writelines(l for l in dev_values)
+    for filename, split_lines in zip((train_path, dev_path, test_path), (train, dev, test)):
+        with open(filename, 'w') as f:
+            f.write(''.join(split_lines))
 
-    train_file.close()
-    test_file.close()
-    dev_file.close()
-
-    return train_values, test_values, dev_values
+    return train, test, dev
 
 
 def dataset_info(path: str) -> None:

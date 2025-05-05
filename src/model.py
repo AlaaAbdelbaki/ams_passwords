@@ -192,21 +192,24 @@ class RNN(nn.Module):
 
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, layer_dim):
         super(LSTMModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.layer_dim = layer_dim
-        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
+
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.lstm = nn.LSTM(embed_dim, hidden_dim, layer_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, vocab_size)  # Predicting vocab index
 
     def forward(self, x, hidden):
-        (h0, c0) = hidden
-
-        out, (hn, cn) = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
+        # x: [B, T]
+        embedded = self.embedding(x)  # [B, T, embed_dim]
+        out, (hn, cn) = self.lstm(embedded, hidden)  # out: [B, T, hidden_dim]
+        out = self.fc(out)  # [B, T, vocab_size]
         return out, (hn, cn)
 
     def init_hidden(self, batch_size):
+        # Hidden and cell states: [num_layers, batch_size, hidden_dim]
         h0 = torch.zeros(self.layer_dim, batch_size,
                          self.hidden_dim).to(device)
         c0 = torch.zeros(self.layer_dim, batch_size,

@@ -6,17 +6,22 @@ from io import open
 from os import makedirs, path
 
 import torch
+import torch.multiprocessing as mp
 import torch.nn as nn
 import unidecode
+from torch.utils.data import DataLoader
 
 from dataset_info import dataset_info, split_data
 from src import (FILENAME, MODEL_PATH, device, hidden_size_default, l_r,
                  max_epochs_default, n_layers_default, n_letters)
+from src.dataset import PasswordDataset
 from src.eval import evaluating
 from src.model import RNN, LSTMModel
 from src.test import testing
 from src.train import training
-from src.Utils import get_lines, get_mean_size, split
+from src.Utils import (choose_model, collate_fn, extract_params,
+                       get_folder_path, get_lines, get_mean_size,
+                       get_model_name)
 
 # Setup logging
 logging.basicConfig(
@@ -69,6 +74,8 @@ def main():
     parser.add_argument(
         "-p", "--percent", default=15, type=float, help="Percentage of names to test"
     )
+    parser.add_argument('--best', action='store_true',
+                        help='Use the best model for evaluation/testing')
 
     args = parser.parse_args()
 
@@ -93,10 +100,10 @@ def main():
     # Hyperparameters
     max_length = args.ml if args.ml > 0 else get_mean_size(train_set)
     learning_rate = args.learning_rate if args.learning_rate is not None else l_r
-    hidden_size = (
-        args.hidden_size if args.hidden_size is not None else hidden_size_default)
+    hidden_size = args.hidden_size if args.hidden_size is not None else hidden_size_default
     n_layers = args.num_layers if args.num_layers is not None else n_layers_default
     max_epochs = args.max_epochs if args.max_epochs is not None else max_epochs_default
+    use_best_model = args.best if args.best is not None else False
 
     print("--------------------------------------------------------------------")
 
@@ -113,17 +120,32 @@ def main():
     makedirs(path.dirname(model_path), exist_ok=True)
 
     if args.trainEval == "train":
-        optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
-        criteron = nn.CrossEntropyLoss()
+        print('ℹ️ Training with the following parameters:')
+        print(f'  - Hidden size: {hidden_size}')
+        print(f'  - Number of layers: {n_layers}')
+        print(f'  - Learning rate: {learning_rate}')
+        print(f'  - Max epochs: {max_epochs}')
+        print(f'  - Model path: {model_path}')
+
+        dataset = PasswordDataset('Dataset/train.txt')
+        dataloader = DataLoader(dataset, batch_size=64, num_workers=0, pin_memory=True,
+                                shuffle=True, collate_fn=collate_fn, persistent_workers=None, prefetch_factor=None)
+
+        model_path = path.join(get_folder_path(
+            n_layers, hidden_size, learning_rate, max_epochs), 'model.pt')
+
+        optimizer = torch.optim.Adam(decoder.to(
+            device).parameters(), lr=learning_rate)
+        criteron = nn.CrossEntropyLoss(ignore_index=-100)
         decoder.train()
         training(
             decoder,
             max_epochs,
-            train_set,
+            dataloader,
             hidden_size,
             n_layers,
             learning_rate,
-            MODEL_PATH,
+            # model_path,
             optimizer,
             criteron,
         )
@@ -131,23 +153,33 @@ def main():
         logging.info(f"Model saved at {model_path}")
 
     elif args.trainEval == "eval":
-        try:
-            decoder.load_state_dict(torch.load(model_path))
-            decoder.to(device).eval()
-            evaluating(decoder, max_length)
-        except Exception as e:
-            logging.error(f"Failed to load model for evaluation: {e}")
+        # try:
+        model = choose_model()
+        num_layers, hidden, _, __, ___, ____ = extract_params(model)
+        decoder = LSTMModel(
+            n_letters, hidden, num_layers, n_letters,).to(device)
+
+        decoder.load_state_dict(torch.load(model))
+        decoder.to(device).eval()
+        evaluating(decoder, max_length)
+        # except Exception as e:
+        #     logging.error(f"Failed to load model for evaluation: {e}")
     elif args.trainEval == "test":
-        try:
-            decoder.load_state_dict(torch.load(model_path))
-            decoder.to(device).eval()
-            testing(decoder, args.n, test_set, args.percent, max_length)
-        except Exception as e:
-            logging.error(f"Failed to load model for testing: {e}")
+        # try:
+        model = choose_model()
+        num_layers, hidden, _, __, ___, ____ = extract_params(model)
+        decoder = LSTMModel(
+            n_letters, hidden, num_layers, n_letters).to(device)
+        decoder.load_state_dict(torch.load(model))
+        decoder.to(device).eval()
+        testing(decoder, args.n, test_set, args.percent, max_length)
+        # except Exception as e:
+        #     logging.error(f"Failed to load model for testing: {e}")
     else:
         logging.error(
             "Invalid --trainEval option. Choose from train/eval/test.")
 
 
 if __name__ == "__main__":
+    mp.set_start_method('spawn')
     main()

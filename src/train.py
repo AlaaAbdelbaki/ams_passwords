@@ -1,22 +1,29 @@
 import logging
+import os
 import random
 import time
 from math import inf
+from os import path
 
 import torch
 import torch.nn as nn
+import tqdm
+from torch.amp import GradScaler, autocast
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from src import device, n_letters
+from src.model import LSTMModel
 from src.preprocessing import input_tensor, target_tensor
-from src.Utils import all_letters, time_since
+from src.Utils import all_letters, create_folder, get_model_name, time_since
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def training(decoder, n_epochs, lines, hidden_size, n_layers, lr, model_path, optimizer, criteron):
+def training(decoder: nn.Module, n_epochs, dataloader: DataLoader, hidden_size, n_layers, lr, optimizer, criteron):
     """
     Trains a model (decoder) for a specified number of epochs and saves the best model based on the loss.
 
@@ -41,29 +48,38 @@ def training(decoder, n_epochs, lines, hidden_size, n_layers, lr, model_path, op
     best_loss = float('inf')
     print_every = max(1, n_epochs // 100)
 
+    train_path = create_folder(n_layers, hidden_size, lr, n_epochs)
+
+    decoder.train()
     for iter in range(1, n_epochs + 1):
         total_loss = 0
+        logging.info(f"Epoch {iter}/{n_epochs}")
         # Sample a random subset of lines for each epoch
-        random_lines = random.sample(lines, 10)
+        loss = train_epoch(decoder, dataloader, optimizer, criteron)
+        writer.add_scalar("Loss/train", loss, iter)
 
-        for index, line in enumerate(random_lines, start=1):
-            output, loss = train(decoder, input_tensor(
-                line).to(device), target_tensor(line).to(device), optimizer, criteron)
-            total_loss += loss
+        # decoder.eval()
+        # total_val_loss = 0
+        # with torch.no_grad():  # No need to calculate gradients during validation
+        #     for j in tqdm.tqdm(range(len(dev_lines)), desc="Validation", unit="line"):
+        #         _, val_loss = train(decoder, input_tensor(line).to(
+        #             device), target_tensor(line).to(device), optimizer, criteron, True)
+        #         total_val_loss += val_loss
 
-        avg_loss = total_loss / len(random_lines)
-        writer.add_scalar("Loss/train", avg_loss, iter)
+        # avg_val_loss = total_val_loss / len(dev_lines)
+        # writer.add_scalar("Loss/val", avg_val_loss, iter)
 
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            torch.save(decoder.state_dict(), model_path)
+        if loss < best_loss:
+            best_loss = loss
+            torch.save(decoder.state_dict(), path.join(train_path, f"best.pt"))
             logging.info(
-                f"New best model saved with loss {best_loss:.4f} at {model_path}")
+                f"New best model saved with validation loss {best_loss:.4f}")
 
         if iter % print_every == 0:
             logging.info(
-                f"{time_since(start)} ({iter} {iter / n_epochs * 100:.2f}%) Loss: {avg_loss:.4f}")
-
+                f"{time_since(start)} ({iter} {iter / n_epochs * 100:.2f}%) Loss: {loss:.4f}")
+            torch.save(decoder.state_dict(), path.join(
+                train_path, "iterations/", f"{iter}.pt"))
     writer.close()
 
 
@@ -109,3 +125,33 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
         loss_calculation = inf
     return output, loss_calculation
     # return output, loss.item() / input_line_tensor.size(0)
+
+
+def train_epoch(model, dataloader, optimizer, criterion):
+    model.train()
+    total_loss = 0
+    pbar = tqdm(dataloader, desc="Training", unit="batch")
+
+    for inputs, targets in pbar:
+        inputs, targets = inputs.to(device), targets.to(device)
+
+        batch_size = inputs.size(0)
+        hidden = model.init_hidden(batch_size)
+
+        optimizer.zero_grad()
+
+        # Forward pass
+        outputs, _ = model(inputs, hidden)  # outputs: [B, T, V]
+
+        # Reshape outputs & targets to compute loss
+        outputs = outputs.view(-1, outputs.size(-1))   # [B*T, V]
+        targets = targets.view(-1)                     # [B*T]
+
+        loss = criterion(outputs, targets)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        pbar.set_postfix(loss=loss.item())
+
+    return total_loss / len(dataloader)

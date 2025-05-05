@@ -23,7 +23,7 @@ The target tensor represents what the model should output after processing the i
 These tensors work together to train the model in sequence-based tasks."""
 import torch
 
-from src import all_letters, n_letters
+from src import all_letters, char2idx, idx2char, n_letters
 
 
 def input_tensor(line):
@@ -37,7 +37,8 @@ def input_tensor(line):
     - tensor (Tensor): A tensor of shape (len(line), 1, n_letters) representing the one-hot encoded characters.
                         Each character in the input string is encoded as a one-hot vector with length `n_letters`.
     """
-    tensor = torch.zeros(len(line), 1, n_letters)  # .long()
+    tensor = torch.zeros(len(line), 1, n_letters,
+                         dtype=torch.float32)  # .long()
     # print(f"Encoding line: {line}")
     for li in range(len(line)):
         letter = line[li]

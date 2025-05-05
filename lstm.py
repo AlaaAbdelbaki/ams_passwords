@@ -116,7 +116,7 @@ class Generator:
         ).to(device)
 
         optimizer = torch.optim.Adam(self.rnn.parameters(), lr=self.lr)
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(ignore_index=-1)
         writer = SummaryWriter(f"runs/passwords0")  # for tensorboard
 
         print("=> Starting training")
