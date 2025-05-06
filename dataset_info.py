@@ -77,9 +77,9 @@ def split_data(rate: float, lines: List[str]) -> Tuple[List[str], List[str], Lis
         test_file = open('Dataset/test.txt', 'r')
         dev_file = open('Dataset/dev.txt', 'r')
 
-        train_values = set(l for l in train_file.readlines())
-        test_values = set(l for l in test_file.readlines())
-        dev_values = set(l for l in dev_file.readlines())
+        train_values = set(l.rstrip('\n') for l in train_file.readlines())
+        test_values = set(l.rstrip('\n') for l in test_file.readlines())
+        dev_values = set(l.rstrip('\n') for l in dev_file.readlines())
 
         train_file.close()
         test_file.close()

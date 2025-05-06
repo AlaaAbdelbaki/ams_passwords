@@ -1,9 +1,11 @@
 import math
+import os
 import string
 import sys
 import time
 import unicodedata
 
+import questionary
 import torch
 
 from src import FILENAME_TEST, FILENAME_TRAIN, all_letters, device, n_letters
@@ -190,3 +192,99 @@ def split(rate, lines):
     f.close()
 
     return names_traing, names_testing
+
+
+def choose_model() -> str:
+    """
+    Choose the model to be used from the ``models``.
+
+    Returns:
+        str: The chosen model path.
+    """
+    if not os.path.exists('models'):
+        raise FileNotFoundError("The 'models' directory does not exist.")
+
+    models = [os.path.join(dir, f) for dir, _, files in os.walk(
+        'models') for f in files if f.endswith('.pt')]
+
+    if not models:
+        raise FileNotFoundError(
+            "No model files found in the 'models' directory.")
+
+    choice = questionary.select(
+        "Choose a model to use:",
+        choices=models
+    ).ask()
+    return choice
+
+
+def get_folder_path(num_layers: int, hidden_size: int, learning_rate: float, epochs: int) -> str:
+    """
+    Generate a folder path based on the model parameters.
+
+    Args:
+        num_layers (int): Number of layers in the model.
+        hidden_size (int): Size of the hidden layer.
+        learning_rate (float): Learning rate for the model.
+        epochs (int): Number of epochs for training.
+
+    Returns:
+        str: The generated folder path.
+    """
+    return f"models/lstm_{num_layers}_{hidden_size}_{learning_rate}_{epochs}"
+
+
+def create_folder(num_layers: int, hidden_size: int, learning_rate: float, epochs: int) -> str:
+    """
+    Create a folder for the model based on the parameters.
+
+    Args:
+        num_layers (int): Number of layers in the model.
+        hidden_size (int): Size of the hidden layer.
+        learning_rate (float): Learning rate for the model.
+        epochs (int): Number of epochs for training.
+
+    Returns:
+        str: The path to the created folder.
+    """
+    folder_path = get_folder_path(
+        num_layers, hidden_size, learning_rate, epochs)
+    os.makedirs(folder_path, exist_ok=True)
+    os.makedirs(os.path.join(folder_path, "iterations"), exist_ok=True)
+    return folder_path
+
+
+def get_model_name(num_layers: int, hidden_size: int, learning_rate: float, epochs: int, iteration: int = None, is_best: bool = False) -> str:
+    num_layers_str = str(num_layers)
+    hidden_size_str = str(hidden_size)
+    learning_rate_str = str(learning_rate).replace('.', '_')
+    epochs_str = str(epochs)
+    iteration_str = str(iteration) if iteration is not None else ""
+    is_best_str = "_best" if is_best else ""
+
+    return f"lstm_{num_layers_str}_{hidden_size_str}_{learning_rate_str}_{epochs_str}_{iteration_str}_{is_best_str}.pt"
+
+
+def extract_params(model_path: str) -> tuple[int, int, float, int, int, bool]:
+    """
+    Extract parameters from the model filename.
+
+    Args:
+        model_path (str): The path to the model file.
+
+    Returns:
+        tuple: A tuple containing the extracted parameters.
+    """
+
+    params = model_path.split('\\')[1]
+    parts = params.split('_')[1:]
+    print(parts)
+
+    num_layers = int(parts[0])
+    hidden_size = int(parts[1])
+    learning_rate = float(parts[2])
+    epochs = int(parts[3])
+    iteration = int(parts[4]) if len(parts) > 5 else None
+    is_best = "_best" in model_path
+
+    return num_layers, hidden_size, learning_rate, epochs, iteration, is_best

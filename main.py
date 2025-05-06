@@ -16,7 +16,8 @@ from src.eval import evaluating
 from src.model import RNN, LSTMModel
 from src.test import testing
 from src.train import training
-from src.Utils import get_lines, get_mean_size, split
+from src.Utils import (choose_model, extract_params, get_folder_path,
+                       get_lines, get_mean_size)
 
 # Setup logging
 logging.basicConfig(
@@ -113,6 +114,8 @@ def main():
     makedirs(path.dirname(model_path), exist_ok=True)
 
     if args.trainEval == "train":
+        model_path = path.join(get_folder_path(
+            n_layers, hidden_size, learning_rate, max_epochs), 'model.pt')
         optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
         criteron = nn.CrossEntropyLoss()
         decoder.train()
@@ -132,14 +135,23 @@ def main():
 
     elif args.trainEval == "eval":
         try:
-            decoder.load_state_dict(torch.load(model_path))
+            model = choose_model()
+            num_layers, hidden, _, __, ___, ____ = extract_params(model)
+            decoder = LSTMModel(
+                n_letters, hidden, num_layers, n_letters,).to(device)
+
+            decoder.load_state_dict(torch.load(model))
             decoder.to(device).eval()
             evaluating(decoder, max_length)
         except Exception as e:
             logging.error(f"Failed to load model for evaluation: {e}")
     elif args.trainEval == "test":
         try:
-            decoder.load_state_dict(torch.load(model_path))
+            model = choose_model()
+            num_layers, hidden, _, __, ___, ____ = extract_params(model)
+            decoder = LSTMModel(
+                n_letters, hidden, num_layers, n_letters).to(device)
+            decoder.load_state_dict(torch.load(model))
             decoder.to(device).eval()
             testing(decoder, args.n, test_set, args.percent, max_length)
         except Exception as e:

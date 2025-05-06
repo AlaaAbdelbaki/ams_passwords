@@ -2,14 +2,16 @@ import logging
 import random
 import time
 from math import inf
+from os import path
 
 import torch
 import torch.nn as nn
+import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from src import device, n_letters
 from src.preprocessing import input_tensor, target_tensor
-from src.Utils import all_letters, time_since
+from src.Utils import all_letters, create_folder, time_since
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -41,18 +43,24 @@ def training(decoder, n_epochs, lines, hidden_size, n_layers, lr, model_path, op
     best_loss = float('inf')
     print_every = max(1, n_epochs // 100)
 
+    train_path = create_folder(n_layers, hidden_size, lr, n_epochs)
+
     for iter in range(1, n_epochs + 1):
         total_loss = 0
         # Sample a random subset of lines for each epoch
-        random_lines = random.sample(lines, 10)
+        # random_lines = random.sample(lines, 10)
 
-        for index, line in enumerate(random_lines, start=1):
+        for index, line in tqdm.tqdm(enumerate(lines), desc="Training", total=len(lines)):
             output, loss = train(decoder, input_tensor(
                 line).to(device), target_tensor(line).to(device), optimizer, criteron)
             total_loss += loss
 
-        avg_loss = total_loss / len(random_lines)
+        avg_loss = total_loss / len(lines)
         writer.add_scalar("Loss/train", avg_loss, iter)
+
+        logging.info(f"Saved iteration {iter} with loss {avg_loss:.4f}")
+        torch.save(decoder.state_dict(), path.join(
+            train_path, "iterations/", f"{iter}.pt"))
 
         if avg_loss < best_loss:
             best_loss = avg_loss
@@ -97,15 +105,6 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
 
     loss.backward()
     optimizer.step()
-    try:
-        loss_calculation = loss.item() / input_line_tensor.size(0)
-    except Exception as e:
-        print(input_line_tensor)
-        # Convert input line tensor to characters
-        input_line = ''.join([all_letters[i]
-                             for i in input_line_tensor.squeeze().tolist()])
-        logging.error(f"Error in loss calculation: {e}")
-        logging.error(f"Line in question: {input_line}")
-        loss_calculation = inf
-    return output, loss_calculation
+
+    return output, loss.item() / input_line_tensor.size(0)
     # return output, loss.item() / input_line_tensor.size(0)
