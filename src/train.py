@@ -7,9 +7,11 @@ from os import path
 import torch
 import torch.nn as nn
 import tqdm
+from torch import Tensor
 from torch.utils.tensorboard import SummaryWriter
 
 from src import device, n_letters
+from src.model import LSTMModel
 from src.preprocessing import input_tensor, target_tensor
 from src.Utils import all_letters, create_folder, time_since
 
@@ -18,7 +20,7 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def training(decoder, n_epochs, lines, hidden_size, n_layers, lr, model_path, optimizer, criteron):
+def training(decoder: nn.Module, n_epochs, lines, hidden_size, n_layers, lr, model_path, optimizer, criteron):
     """
     Trains a model (decoder) for a specified number of epochs and saves the best model based on the loss.
 
@@ -44,6 +46,7 @@ def training(decoder, n_epochs, lines, hidden_size, n_layers, lr, model_path, op
     print_every = max(1, n_epochs // 100)
 
     train_path = create_folder(n_layers, hidden_size, lr, n_epochs)
+    lines = random.sample(lines, 10000)
 
     for iter in range(1, n_epochs + 1):
         total_loss = 0
@@ -75,7 +78,7 @@ def training(decoder, n_epochs, lines, hidden_size, n_layers, lr, model_path, op
     writer.close()
 
 
-def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
+def train(decoder: LSTMModel, input_line_tensor: Tensor, target_line_tensor: Tensor, optimizer, criteron):
     """
     Performs a single training step: computes the forward pass, calculates the loss, and updates the model.
 
@@ -91,7 +94,7 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
     """
     target_line_tensor = target_line_tensor.unsqueeze(
         -1)  # Reshape target tensor for loss computation
-    hidden = decoder.init_hidden(target_line_tensor[0].size(0))
+    hidden = decoder.init_hidden(input_line_tensor[0].size(0))
 
     decoder.zero_grad()
     loss = torch.tensor(0.0, requires_grad=True).to(device)
@@ -106,5 +109,5 @@ def train(decoder, input_line_tensor, target_line_tensor, optimizer, criteron):
     loss.backward()
     optimizer.step()
 
-    return output, loss.item() / input_line_tensor.size(0)
+    return output, loss.item()
     # return output, loss.item() / input_line_tensor.size(0)

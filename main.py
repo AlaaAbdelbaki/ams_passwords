@@ -126,7 +126,7 @@ def main():
             hidden_size,
             n_layers,
             learning_rate,
-            MODEL_PATH,
+            model_path,
             optimizer,
             criteron,
         )

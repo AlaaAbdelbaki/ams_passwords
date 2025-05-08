@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import traceback
 
@@ -31,12 +32,21 @@ def evaluating(decoder, max_length):
                 logging.warning(
                     "Invalid input: number of predictions must be greater than 0.")
                 continue
+            if not os.path.exists("generated"):
+                os.makedirs(f"generated")
+            gen = open(f"generated/Output_{num_predictions}.txt", "a+")
+
+            predictions: list[str] = []
 
             for i in range(num_predictions):
                 # Ensure all_letters is defined
                 starting_letters = random.choice(all_letters)
                 predicted = sample(decoder, max_length, starting_letters)
+                predictions.append(predicted)
+                gen.write(predicted + "\n")
                 logging.info(f"Prediction {i + 1}: {predicted}")
+
+            gen.close()
 
             logging.info("------------\n")
 
