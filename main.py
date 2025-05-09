@@ -8,16 +8,18 @@ from os import makedirs, path
 import torch
 import torch.nn as nn
 import unidecode
+from torch.utils.data import DataLoader
 
 from dataset_info import dataset_info, split_data
-from src import (FILENAME, MODEL_PATH, device, hidden_size_default, l_r,
-                 max_epochs_default, n_layers_default, n_letters)
+from src import (FILENAME, MODEL_PATH, PAD_IDX, device, hidden_size_default,
+                 l_r, max_epochs_default, n_layers_default, n_letters)
+from src.dataloader import PasswordDataset
 from src.eval import evaluating
 from src.model import RNN, LSTMModel
 from src.test import testing
-from src.train import training
-from src.Utils import (choose_model, extract_params, get_folder_path,
-                       get_lines, get_mean_size)
+from src.train import training, training_with_batches
+from src.Utils import (all_letters, choose_model, collate_fn, extract_params,
+                       get_folder_path, get_lines, get_mean_size)
 
 # Setup logging
 logging.basicConfig(
@@ -61,6 +63,7 @@ def main():
         "--s", default=0.7, type=float, help="Training set percentage (default: 70%)"
     )
     parser.add_argument("--num_layers", default=2, type=int)
+    parser.add_argument("--embde_size", default=32, type=int)
     parser.add_argument("--hidden_size", default=256, type=int)
     parser.add_argument(
         "--bidirectional", default=True, type=bool, help="Use bidirectional model"
@@ -69,6 +72,13 @@ def main():
     parser.add_argument("--learning_rate", default=0.001, type=float)
     parser.add_argument(
         "-p", "--percent", default=15, type=float, help="Percentage of names to test"
+    )
+    parser.add_argument(
+        "-b",
+        "--batch_size",
+        default=32,
+        type=int,
+        help="Batch size for training (default: 32)",
     )
 
     args = parser.parse_args()
@@ -98,12 +108,19 @@ def main():
         args.hidden_size if args.hidden_size is not None else hidden_size_default)
     n_layers = args.num_layers if args.num_layers is not None else n_layers_default
     max_epochs = args.max_epochs if args.max_epochs is not None else max_epochs_default
+    embedding_dim = args.embde_size if args.embde_size is not None else 32
+    batch_size = 32 if args.batch_size is None else args.batch_size
 
     print("--------------------------------------------------------------------")
 
     # Initialize the Model (decoder)
     # decoder = RNN(n_letters, hidden_size, n_letters, n_layers).to(device)
-    decoder = LSTMModel(n_letters, hidden_size, n_layers, n_letters).to(device)
+    decoder = LSTMModel(
+        n_letters=n_letters,          # Input vocab size
+        embedding_dim=embedding_dim,   # Size of each embedding vector
+        hidden_size=hidden_size,       # LSTM hidden size
+        n_layers=n_layers,         # LSTM layers
+    ).to(device)
     decoder.summary(n_letters, hidden_size, n_letters, n_layers)
 
     model_filename = (
@@ -114,52 +131,79 @@ def main():
     makedirs(path.dirname(model_path), exist_ok=True)
 
     if args.trainEval == "train":
+        dataset = PasswordDataset(train_set, all_letters, n_letters)
+        dataloader = DataLoader(
+            dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True, num_workers=2)
         model_path = path.join(get_folder_path(
             n_layers, hidden_size, learning_rate, max_epochs), 'model.pt')
         optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
-        criteron = nn.CrossEntropyLoss()
+        criteron = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
         decoder.train()
-        training(
+        training_with_batches(
             decoder,
-            max_epochs,
-            train_set,
-            hidden_size,
             n_layers,
+            hidden_size,
             learning_rate,
-            model_path,
+            max_epochs,
+            dataloader,
             optimizer,
             criteron,
         )
+        # training(
+        #     decoder,
+        #     max_epochs,
+        #     train_set,
+        #     hidden_size,
+        #     n_layers,
+        #     learning_rate,
+        #     model_path,
+        #     optimizer,
+        #     criteron,
+        # )
         torch.save(decoder.state_dict(), model_path)
         logging.info(f"Model saved at {model_path}")
 
     elif args.trainEval == "eval":
-        try:
-            model = choose_model()
-            num_layers, hidden, _, __, ___, ____ = extract_params(model)
-            decoder = LSTMModel(
-                n_letters, hidden, num_layers, n_letters,).to(device)
+        # ───────────────────────────────────
+        # EVAL (generation)
+        model_file = choose_model()
+        num_layers, hidden, _, __, ___, ____ = extract_params(model_file)
+        decoder = LSTMModel(
+            n_letters=n_letters,
+            embedding_dim=embedding_dim,
+            hidden_size=hidden,
+            n_layers=num_layers
+        ).to(device)
+        decoder.load_state_dict(torch.load(model_file, map_location=device))
+        decoder.eval()
 
-            decoder.load_state_dict(torch.load(model))
-            decoder.to(device).eval()
-            evaluating(decoder, max_length)
-        except Exception as e:
-            logging.error(f"Failed to load model for evaluation: {e}")
+        # call your interactive evaluator on the eval_set if you need to seed from it,
+        # otherwise this will just prompt you for generation.
+        evaluating(decoder, max_length)
+
     elif args.trainEval == "test":
-        try:
-            model = choose_model()
-            num_layers, hidden, _, __, ___, ____ = extract_params(model)
-            decoder = LSTMModel(
-                n_letters, hidden, num_layers, n_letters).to(device)
-            decoder.load_state_dict(torch.load(model))
-            decoder.to(device).eval()
-            testing(decoder, args.n, test_set, args.percent, max_length)
-        except Exception as e:
-            logging.error(f"Failed to load model for testing: {e}")
+        # ───────────────────────────────────
+        # TEST (per‑example scoring or hold‑out generation)
+        model_file = choose_model()
+        num_layers, hidden, _, __, ___, ____ = extract_params(model_file)
+        decoder = LSTMModel(
+            n_letters=n_letters,
+            embedding_dim=embedding_dim,
+            hidden_size=hidden,
+            n_layers=num_layers
+        ).to(device)
+        decoder.load_state_dict(torch.load(model_file, map_location=device))
+        decoder.eval()
+
+        # testing() should take (model, n, test_set, percent, max_length)
+        # where test_set is your list of held‑out passwords
+        testing(decoder, args.n, test_set, args.percent, max_length)
     else:
         logging.error(
             "Invalid --trainEval option. Choose from train/eval/test.")
 
 
 if __name__ == "__main__":
+    import torch.multiprocessing as mp
+    mp.set_start_method("spawn", force=True)
     main()

@@ -2,8 +2,9 @@ import logging
 
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from src import device  # Ensure device is imported correctly
+from src import PAD_IDX, device  # Ensure device is imported correctly
 
 # Setup logging
 logging.basicConfig(level=logging.INFO,
@@ -191,34 +192,110 @@ class RNN(nn.Module):
         print(model_summary)
 
 
+# class LSTMModel(nn.Module):
+#     def __init__(self, n_letters, embedding_dim, hidden_size, n_layers=1):
+#         super(LSTMModel, self).__init__()
+#         self.embedding = nn.Embedding(n_letters, embedding_dim)
+#         self.lstm = nn.LSTM(embedding_dim, hidden_size, n_layers)
+#         self.fc = nn.Linear(hidden_size, n_letters)
+
+#     def forward(self, input_char_idx, hidden):
+#         # (seq_len, batch, embedding_dim)
+#         embedded = self.embedding(input_char_idx)
+#         output, hidden = self.lstm(embedded, hidden)
+#         # Only use the last output if decoding step-by-step
+#         output = self.fc(output[-1])
+#         return output, hidden
+
+#     def init_hidden(self, batch_size):
+#         return (torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(device),
+#                 torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(device))
+
+#     def init_hidden_random(self, batch_size):
+#         return (torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(device),
+#                 torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(device))
+
+#     def summary(self, input_size, hidden_size, output_size, seq_len):
+#         """
+#         Prints a summary of the LSTM model architecture.
+
+#         Args:
+#             input_size (int): The number of input features.
+#             hidden_size (int): The number of features in the hidden state.
+#             output_size (int): The number of output features.
+#             seq_len (int): The length of the input sequence.
+#         """
+#         model_summary = f"LSTM Model Summary\n"
+#         model_summary += f"{'Layer':<20}{'Input Shape':<25}{'Output Shape':<25}{'Param #'}\n"
+#         model_summary += "=" * 80 + "\n"
+
+#         total_params = 0
+
+#         # LSTM Layer
+#         # (batch_size, seq_len, input_size)
+#         lstm_input_shape = (None, seq_len, input_size)
+#         # (batch_size, seq_len, hidden_size)
+#         lstm_output_shape = (None, seq_len, hidden_size)
+#         lstm_params = (4 * hidden_size * (input_size +
+#                        hidden_size + 1)) * self.lstm.num_layers
+#         total_params += lstm_params
+#         model_summary += f"{'LSTM':<20}{str(lstm_input_shape):<25}{str(lstm_output_shape):<25}{lstm_params}\n"
+
+#         # Fully Connected Layer
+#         fc_input_shape = (None, hidden_size)  # (batch_size, hidden_size)
+#         fc_output_shape = (None, output_size)  # (batch_size, output_size)
+#         fc_params = hidden_size * output_size + output_size  # Weights + Bias
+#         total_params += fc_params
+#         model_summary += f"{'Fully Connected':<20}{str(fc_input_shape):<25}{str(fc_output_shape):<25}{fc_params}\n"
+
+#         model_summary += "=" * 80 + \
+#             f"\nTotal Trainable Params: {total_params}\n"
+#         print(model_summary)
+
 class LSTMModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
-        super(LSTMModel, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.layer_dim = layer_dim
-        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
+    def __init__(self, n_letters, embedding_dim, hidden_size, n_layers=1):
+        super().__init__()
+        # Reserve one extra row for remapped -1
+        self.embedding = nn.Embedding(n_letters + 1, embedding_dim)
+        self.lstm = nn.LSTM(embedding_dim, hidden_size, n_layers)
+        self.fc = nn.Linear(hidden_size, n_letters)
 
-    def forward(self, x, hidden):
-        (h0, c0) = hidden
+    def forward(self, input_seq, hidden, input_lengths=None):
+        # input_seq: (seq_len, batch)
+        embedded = self.embedding(input_seq)  # → (seq_len, batch, embed_dim)
 
-        out, (hn, cn) = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
-        return out, (hn, cn)
+        if input_lengths is not None:
+            # Ensure input_lengths is a CPU tensor before passing to pack_padded_sequence
+            input_lengths = input_lengths.cpu()
+
+            # Pack padded sequence: (seq_len, batch, embed_dim) → packed sequence
+            embedded = pack_padded_sequence(
+                embedded, input_lengths, enforce_sorted=False)
+
+        # LSTM processing: (packed sequence) → (output, hidden)
+        output, hidden = self.lstm(embedded, hidden)
+
+        # print(f"LSTM output shape: {output.shape}")  # Check output shape
+
+        if input_lengths is not None:
+            # Unpack the sequence to get the output of the full sequence length
+            output, _ = pad_packed_sequence(output)
+
+        # Check the shape after padding
+        # print(f"After padding: {output.shape}")
+
+        # Fully connected layer: → (seq_len, batch, n_letters)
+        output = self.fc(output)
+
+        return output, hidden
 
     def init_hidden(self, batch_size):
-        h0 = torch.zeros(self.layer_dim, batch_size,
-                         self.hidden_dim).to(device)
-        c0 = torch.zeros(self.layer_dim, batch_size,
-                         self.hidden_dim).to(device)
-        return (h0, c0)
-
-    def init_hidden_random(self, batch_size):
-        h0 = torch.rand(self.layer_dim, batch_size,
-                        self.hidden_dim).to(device)
-        c0 = torch.rand(self.layer_dim, batch_size,
-                        self.hidden_dim).to(device)
-        return (h0, c0)
+        return (
+            torch.zeros(self.lstm.num_layers, batch_size,
+                        self.lstm.hidden_size, device=device),
+            torch.zeros(self.lstm.num_layers, batch_size,
+                        self.lstm.hidden_size, device=device)
+        )
 
     def summary(self, input_size, hidden_size, output_size, seq_len):
         """
@@ -242,7 +319,7 @@ class LSTMModel(nn.Module):
         # (batch_size, seq_len, hidden_size)
         lstm_output_shape = (None, seq_len, hidden_size)
         lstm_params = (4 * hidden_size * (input_size +
-                       hidden_size + 1)) * self.layer_dim
+                       hidden_size + 1)) * self.lstm.num_layers
         total_params += lstm_params
         model_summary += f"{'LSTM':<20}{str(lstm_input_shape):<25}{str(lstm_output_shape):<25}{lstm_params}\n"
 

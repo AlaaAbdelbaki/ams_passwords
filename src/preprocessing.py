@@ -37,14 +37,8 @@ def input_tensor(line):
     - tensor (Tensor): A tensor of shape (len(line), 1, n_letters) representing the one-hot encoded characters.
                         Each character in the input string is encoded as a one-hot vector with length `n_letters`.
     """
-    tensor = torch.zeros(len(line), 1, n_letters)  # .long()
-    # print(f"Encoding line: {line}")
-    for li in range(len(line)):
-        letter = line[li]
-        tensor[li][0][all_letters.find(letter)] = 1
-    if len(tensor[0]) == 0:
-        print(f"Error: tensor[0] is empty: {line}")
-    return tensor
+    indices = [all_letters.find(c) for c in line]
+    return torch.tensor(indices, dtype=torch.long).unsqueeze(1)
 
 
 # LongTensor of second letter to end (EOS) for target
