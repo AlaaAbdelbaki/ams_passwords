@@ -18,7 +18,7 @@ from src.eval import evaluating
 from src.model import RNN, LSTMModel
 from src.test import testing
 from src.train import training
-from src.Utils import (choose_model, collate_fn, extract_params,
+from src.Utils import (check_matches, choose_model, collate_fn, extract_params,
                        generate_passwords, get_folder_path, get_lines,
                        get_mean_size)
 
@@ -120,7 +120,7 @@ def main():
         model_path = path.join(get_folder_path(
             n_layers, hidden_size, learning_rate, max_epochs), 'model.pt')
         dataset = PasswordDataset(train_set)
-        dataloader = DataLoader(dataset, batch_size=2,
+        dataloader = DataLoader(dataset, batch_size=16,
                                 shuffle=True, collate_fn=collate_fn)
         optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
         criteron = nn.CrossEntropyLoss()
@@ -159,7 +159,8 @@ def main():
                 n_letters, hidden, num_layers, n_letters).to(device)
             decoder.load_state_dict(torch.load(model))
             decoder.to(device).eval()
-            generate_passwords(decoder, args.n, max_length)
+            passwords = generate_passwords(decoder, args.n, max_length)
+            check_matches(passwords, test_set)
             # testing(decoder, args.n, test_set, args.percent, max_length)
         except Exception as e:
             logging.error(f"Failed to load model for testing: {e}")

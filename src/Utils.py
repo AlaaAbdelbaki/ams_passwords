@@ -11,8 +11,8 @@ import torch
 import tqdm
 from torch.nn.utils.rnn import pad_sequence
 
-from src import (FILENAME_TEST, FILENAME_TRAIN, all_letters, char2idx, device,
-                 idx2char, n_letters, pad_idx)
+from src import (FILENAME_TEST, FILENAME_TRAIN, PAD_TOKEN, all_letters,
+                 char2idx, device, idx2char, n_letters, pad_idx)
 from src.preprocessing import input_tensor
 
 
@@ -330,9 +330,12 @@ def generate_passwords(model, n, max_len=20):
     generated_passwords = []
 
     # Loop to generate `n` passwords
-    for _ in tqdm.tqdm(range(n), desc="Generating passwords"):
+    progress = tqdm.tqdm(range(n), desc="Generating passwords")
+    for _ in progress:
         # Start with a random character (usually a token for password start)
-        start_idx = random.choice(list(char2idx.values()))
+        start_idx = char2idx[random.choice([
+            ch for ch in char2idx if ch not in ('\n', PAD_TOKEN)
+        ])]
         input_seq = torch.tensor([[start_idx]], dtype=torch.long).to(device)
 
         # Start with initial hidden state for batch size 1
@@ -345,11 +348,15 @@ def generate_passwords(model, n, max_len=20):
             # Get the predicted character (softmax could be used for better sampling)
             predicted_idx = torch.argmax(output[0, -1, :]).item()
 
+            # Skip if the predicted character is <PAD>
+            if predicted_idx == pad_idx:
+                continue
+
             # Convert the index back to character
             predicted_char = idx2char[predicted_idx]
 
             # Stop if the predicted character is <EOS>
-            if predicted_char == '<EOS>':
+            if predicted_char == '\n':
                 break
 
             password += predicted_char
@@ -358,12 +365,33 @@ def generate_passwords(model, n, max_len=20):
             input_seq = torch.tensor(
                 [[predicted_idx]], dtype=torch.long).to(device)
 
+        password = password.strip()
+
+        progress.set_postfix({"Generated Password": password})
+
         generated_passwords.append(password)
 
-        print(len(generated_passwords), password)
+        # print(len(generated_passwords), password)
 
-        file = open(f"generated\chatgpt_{n}.txt", "w")
-        file.writelines(generated_passwords)
-        file.close()
+    file = open(f"generated\chatgpt_{n}.txt", "w")
+    file.writelines([f"{password}\n" for password in generated_passwords])
+    file.close()
 
     return generated_passwords
+
+
+def check_matches(passwords: list[str], valid_names: list[str]) -> float:
+    """
+    Check how many generated passwords match with valid names.
+
+    Args:
+        passwords (list[str]): List of generated passwords.
+        valid_names (list[str]): List of valid names to check against.
+
+    Returns:
+        float: Percentage of matches.
+    """
+    matches = sum(1 for password in passwords if password in valid_names)
+    print(
+        f"Matches: {matches} out of {len(passwords)} Percentage: {matches / len(passwords) * 100:.2f}%")
+    return (matches / len(passwords)) * 100 if passwords else 0.0
