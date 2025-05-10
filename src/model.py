@@ -3,7 +3,7 @@ import logging
 import torch
 import torch.nn as nn
 
-from src import device  # Ensure device is imported correctly
+from src import device, pad_idx  # Ensure device is imported correctly
 
 # Setup logging
 logging.basicConfig(level=logging.INFO,
@@ -192,19 +192,29 @@ class RNN(nn.Module):
 
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
+    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim, embed_dim=64, pad_idx=0):
         super(LSTMModel, self).__init__()
+        self.embedding = nn.Embedding(
+            input_dim, embed_dim, padding_idx=pad_idx)
         self.hidden_dim = hidden_dim
         self.layer_dim = layer_dim
-        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
+
+        # Fix: Set the LSTM input_size to embed_dim
+        self.lstm = nn.LSTM(embed_dim, hidden_dim, layer_dim,
+                            batch_first=True)  # input_size = embed_dim
         self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x, hidden):
-        (h0, c0) = hidden
+    def forward(self, x, hidden=None):
+        embedded = self.embedding(x)  # (batch, seq_len, embed_dim)
 
-        out, (hn, cn) = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
-        return out, (hn, cn)
+        if hidden is None:
+            hidden = self.init_hidden(x.size(0))  # batch_size
+
+        # out: (batch, seq_len, hidden_dim)
+        out, hidden = self.lstm(embedded, hidden)
+        out = self.fc(out)  # (batch, seq_len, output_dim)
+
+        return out, hidden
 
     def init_hidden(self, batch_size):
         h0 = torch.zeros(self.layer_dim, batch_size,

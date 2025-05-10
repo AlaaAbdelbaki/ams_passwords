@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import string
 import sys
 import time
@@ -7,8 +8,11 @@ import unicodedata
 
 import questionary
 import torch
+import tqdm
+from torch.nn.utils.rnn import pad_sequence
 
-from src import FILENAME_TEST, FILENAME_TRAIN, all_letters, device, n_letters
+from src import (FILENAME_TEST, FILENAME_TRAIN, all_letters, char2idx, device,
+                 idx2char, n_letters, pad_idx)
 from src.preprocessing import input_tensor
 
 
@@ -288,3 +292,78 @@ def extract_params(model_path: str) -> tuple[int, int, float, int, int, bool]:
     is_best = "_best" in model_path
 
     return num_layers, hidden_size, learning_rate, epochs, iteration, is_best
+
+
+def encode_password(pw: str):
+    if not pw.endswith('\n'):
+        pw += '\n'
+    input_seq = [char2idx[ch] for ch in pw[:-1]]
+    target_seq = [char2idx[ch] for ch in pw[1:]]
+    return input_seq, target_seq
+
+
+def collate_fn(batch):
+    inputs, targets = zip(*batch)    # This is where the unpacking fails
+    inputs_padded = pad_sequence(
+        inputs, batch_first=True, padding_value=pad_idx)
+    targets_padded = pad_sequence(
+        targets, batch_first=True, padding_value=pad_idx)
+    return inputs_padded, targets_padded
+
+
+def generate_passwords(model, n, max_len=20):
+    """
+    Generates `n` passwords using the trained model.
+
+    Args:
+        model: The trained LSTM model.
+        n (int): The number of passwords to generate.
+        char2idx (dict): A dictionary mapping characters to indices.
+        idx2char (dict): A dictionary mapping indices to characters.
+        max_len (int): Maximum length of generated passwords (including the EOS token).
+        device (str): The device to run the model on ('cuda' or 'cpu').
+
+    Returns:
+        List[str]: A list of `n` generated passwords.
+    """
+    model.eval()  # Set the model to evaluation mode
+    generated_passwords = []
+
+    # Loop to generate `n` passwords
+    for _ in tqdm.tqdm(range(n), desc="Generating passwords"):
+        # Start with a random character (usually a token for password start)
+        start_idx = random.choice(list(char2idx.values()))
+        input_seq = torch.tensor([[start_idx]], dtype=torch.long).to(device)
+
+        # Start with initial hidden state for batch size 1
+        hidden = model.init_hidden(1)
+        password = ''
+
+        for _ in range(max_len):
+            output, hidden = model(input_seq, hidden)
+
+            # Get the predicted character (softmax could be used for better sampling)
+            predicted_idx = torch.argmax(output[0, -1, :]).item()
+
+            # Convert the index back to character
+            predicted_char = idx2char[predicted_idx]
+
+            # Stop if the predicted character is <EOS>
+            if predicted_char == '<EOS>':
+                break
+
+            password += predicted_char
+
+            # Prepare the next input (the predicted character as input to the next timestep)
+            input_seq = torch.tensor(
+                [[predicted_idx]], dtype=torch.long).to(device)
+
+        generated_passwords.append(password)
+
+        print(len(generated_passwords), password)
+
+        file = open(f"generated\chatgpt_{n}.txt", "w")
+        file.writelines(generated_passwords)
+        file.close()
+
+    return generated_passwords

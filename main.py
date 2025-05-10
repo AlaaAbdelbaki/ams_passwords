@@ -8,16 +8,19 @@ from os import makedirs, path
 import torch
 import torch.nn as nn
 import unidecode
+from torch.utils.data import DataLoader
 
 from dataset_info import dataset_info, split_data
 from src import (FILENAME, MODEL_PATH, device, hidden_size_default, l_r,
                  max_epochs_default, n_layers_default, n_letters)
+from src.dataset import PasswordDataset
 from src.eval import evaluating
 from src.model import RNN, LSTMModel
 from src.test import testing
 from src.train import training
-from src.Utils import (choose_model, extract_params, get_folder_path,
-                       get_lines, get_mean_size)
+from src.Utils import (choose_model, collate_fn, extract_params,
+                       generate_passwords, get_folder_path, get_lines,
+                       get_mean_size)
 
 # Setup logging
 logging.basicConfig(
@@ -116,13 +119,16 @@ def main():
     if args.trainEval == "train":
         model_path = path.join(get_folder_path(
             n_layers, hidden_size, learning_rate, max_epochs), 'model.pt')
+        dataset = PasswordDataset(train_set)
+        dataloader = DataLoader(dataset, batch_size=2,
+                                shuffle=True, collate_fn=collate_fn)
         optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
         criteron = nn.CrossEntropyLoss()
         decoder.train()
         training(
             decoder,
             max_epochs,
-            train_set,
+            dataloader,
             hidden_size,
             n_layers,
             learning_rate,
@@ -153,7 +159,8 @@ def main():
                 n_letters, hidden, num_layers, n_letters).to(device)
             decoder.load_state_dict(torch.load(model))
             decoder.to(device).eval()
-            testing(decoder, args.n, test_set, args.percent, max_length)
+            generate_passwords(decoder, args.n, max_length)
+            # testing(decoder, args.n, test_set, args.percent, max_length)
         except Exception as e:
             logging.error(f"Failed to load model for testing: {e}")
     else:

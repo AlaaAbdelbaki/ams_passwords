@@ -8,7 +8,15 @@ FILENAME_TRAIN = r"Dataset/train.txt"
 FILENAME_TEST = r"Dataset/test.txt"
 MODEL_PATH = r"models/model_trained.pth"
 
-all_letters = string.digits + string.ascii_letters + string.punctuation + ' '
+all_letters = string.digits + string.ascii_letters + string.punctuation + ' ' + "\n"
+PAD_TOKEN = "<PAD>"
+
+char2idx = {ch: idx for idx, ch in enumerate(all_letters)}
+char2idx[PAD_TOKEN] = len(char2idx)
+idx2char = {idx: ch for ch, idx in char2idx.items()}
+vocab_size = len(char2idx)
+pad_idx = char2idx[PAD_TOKEN]
+
 # all_letters = string.ascii_letters + \
 #     " \.\,\;\'\-\(\)\[\]\@\*\$\#\%\!\^\<\>\/\\" + "0123456789"
 n_letters = len(all_letters) + 1    # Plus EOS marker

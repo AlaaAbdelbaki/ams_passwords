@@ -21,23 +21,7 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def training(decoder: nn.Module, n_epochs, lines, hidden_size, n_layers, lr, model_path, optimizer, criteron):
-    """
-    Trains a model (decoder) for a specified number of epochs and saves the best model based on the loss.
-
-    Args:
-        decoder: The model to be trained.
-        n_epochs (int): The number of training epochs.
-        lines (list): The data used for training, where each item represents a line to be processed.
-        criterion: The loss function used to evaluate the model.
-        hidden_size (int): The number of hidden units in the model.
-        n_layers (int): The number of layers in the model.
-        lr (float): The learning rate for the optimizer.
-        model_path (str): The path to save the best model.
-
-    Logs:
-        Info-level logs include the training progress, best model updates, and loss values.
-    """
+def training(decoder: nn.Module, n_epochs, dataloader, hidden_size, n_layers, lr, model_path, optimizer, criterion):
     logging.info("\n-----------\n|  TRAIN  |\n-----------")
 
     writer = SummaryWriter(
@@ -47,29 +31,31 @@ def training(decoder: nn.Module, n_epochs, lines, hidden_size, n_layers, lr, mod
     print_every = max(1, n_epochs // 100)
 
     train_path = create_folder(n_layers, hidden_size, lr, n_epochs)
-    # lines = random.sample(lines, 100)
 
-    for iter in range(1, n_epochs + 1):
+    for epoch in range(1, n_epochs + 1):
         total_loss = 0
-        progress = tqdm.tqdm(enumerate(
-            lines), desc=f"Epoch {iter}/{n_epochs}", total=len(lines), leave=False)
+        progress = tqdm.tqdm(
+            dataloader, desc=f"Epoch {epoch}/{n_epochs}", leave=False)
 
-        for index, line in progress:
+        for batch_inputs, batch_targets in progress:
+            batch_inputs = batch_inputs.to(device)
+            batch_targets = batch_targets.to(device)
+
             output, loss = train(
                 decoder,
-                input_tensor(line).to(device),
-                target_tensor(line).to(device),
+                batch_inputs,
+                batch_targets,
                 optimizer,
-                criteron
+                criterion
             )
             total_loss += loss
-            avg_loss_so_far = total_loss / (index + 1)
+            avg_loss_so_far = total_loss / (len(progress) + 1e-8)
             progress.set_postfix({"avg_loss": f"{avg_loss_so_far:.4f}"})
 
-        avg_loss = total_loss / len(lines)
-        writer.add_scalar("Loss/train", avg_loss, iter)
+        avg_loss = total_loss / len(dataloader)
+        writer.add_scalar("Loss/train", avg_loss, epoch)
 
-        logging.info(f"Saved iteration {iter} with loss {avg_loss:.4f}")
+        logging.info(f"Saved epoch {epoch} with loss {avg_loss:.4f}")
         torch.save(decoder.state_dict(), path.join(train_path, "iteration.pt"))
 
         if avg_loss < best_loss:
@@ -78,50 +64,35 @@ def training(decoder: nn.Module, n_epochs, lines, hidden_size, n_layers, lr, mod
             logging.info(
                 f"New best model saved with loss {best_loss:.4f} at {model_path}")
 
-        if iter % print_every == 0:
+        if epoch % print_every == 0:
             logging.info(
-                f"{time_since(start)} ({iter} {iter / n_epochs * 100:.2f}%) Loss: {avg_loss:.4f}")
+                f"{time_since(start)} ({epoch} {epoch / n_epochs * 100:.2f}%) Loss: {avg_loss:.4f}")
 
     writer.close()
 
 
 def train(
     decoder: LSTMModel,
-    input_line_tensor: torch.Tensor,
-    target_line_tensor: torch.Tensor,
+    input_tensor: torch.Tensor,    # shape: (batch_size, seq_len)
+    target_tensor: torch.Tensor,   # shape: (batch_size, seq_len)
     optimizer: torch.optim.Optimizer,
     criterion: torch.nn.Module
 ) -> Tuple[torch.Tensor, float]:
     """
     Performs one training step: forward pass, loss computation, and backpropagation.
 
-    Args:
-        decoder: The LSTMModel instance.
-        input_line_tensor (Tensor): Shape (seq_len, batch_size, input_dim)
-        target_line_tensor (Tensor): Shape (seq_len, batch_size)
-        optimizer: Optimizer used for training.
-        criterion: Loss function.
-
     Returns:
-        output: Final output tensor from the model.
-        loss: Scalar float loss value.
+        output: The decoder output (batch, seq_len, vocab_size)
+        loss:   Total scalar loss
     """
-    target_line_tensor = target_line_tensor.unsqueeze(
-        -1)  # Ensure shape (seq_len, batch_size, 1)
-    hidden = decoder.init_hidden(batch_size=input_line_tensor.size(1))
+    decoder.train()
+    optimizer.zero_grad()
 
-    decoder.zero_grad()
-    loss = 0.0
-    output = None
-
-    seq_len = input_line_tensor.size(0)
-
-    for i in range(seq_len):
-        output, hidden = decoder(input_line_tensor[i].unsqueeze(0), hidden)
-        l = criterion(output, target_line_tensor[i].to(output.device))
-        loss += l
+    outputs, _ = decoder(input_tensor)
+    loss = criterion(outputs.view(-1, outputs.size(-1)),
+                     target_tensor.view(-1))
 
     loss.backward()
     optimizer.step()
 
-    return output, loss.item()
+    return outputs, loss.item()
