@@ -114,6 +114,11 @@ def main():
     makedirs(path.dirname(model_path), exist_ok=True)
 
     if args.trainEval == "train":
+        # Overriding for now
+        n_layers = 2
+        hidden_size = 256
+        learning_rate = 0.001
+        max_epochs = 10
         model_path = path.join(get_folder_path(
             n_layers, hidden_size, learning_rate, max_epochs), 'model.pt')
         optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
