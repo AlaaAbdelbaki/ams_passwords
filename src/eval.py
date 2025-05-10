@@ -34,7 +34,7 @@ def evaluating(decoder, max_length):
                 continue
             if not os.path.exists("generated"):
                 os.makedirs(f"generated")
-            gen = open(f"generated/Output_{num_predictions}.txt", "a+")
+            gen = open(f"generated/Output_{num_predictions}.txt", "w")
 
             predictions: list[str] = []
 

@@ -67,49 +67,51 @@ def avgNameLength(lines: List[str]) -> float:
 
 def split_data(rate: float, lines: List[str]) -> Tuple[List[str], List[str], List[str]]:
     """
-    Split the data into training and testing sets.
+    Split the data into training, testing, and development sets.
+    If split files exist, read from them instead.
     """
+    os.makedirs('Dataset', exist_ok=True)
 
-    if os.path.exists('Dataset/train.txt') and os.path.exists('Dataset/test.txt') and os.path.exists('Dataset/dev.txt'):
+    train_path = 'Dataset/train.txt'
+    test_path = 'Dataset/test.txt'
+    dev_path = 'Dataset/dev.txt'
+
+    if os.path.exists(train_path) and os.path.exists(test_path) and os.path.exists(dev_path):
         print("Dataset already split. Skipping split.")
 
-        train_file = open('Dataset/train.txt', 'r')
-        test_file = open('Dataset/test.txt', 'r')
-        dev_file = open('Dataset/dev.txt', 'r')
-
-        train_values = set(l.rstrip('\n') for l in train_file.readlines())
-        test_values = set(l.rstrip('\n') for l in test_file.readlines())
-        dev_values = set(l.rstrip('\n') for l in dev_file.readlines())
-
-        train_file.close()
-        test_file.close()
-        dev_file.close()
+        with open(train_path, 'r') as train_file:
+            train_values = [l.rstrip('\n') for l in train_file.readlines()]
+        with open(test_path, 'r') as test_file:
+            test_values = [l.rstrip('\n') for l in test_file.readlines()]
+        with open(dev_path, 'r') as dev_file:
+            dev_values = [l.rstrip('\n') for l in dev_file.readlines()]
 
         return train_values, test_values, dev_values
 
-    lines = list(set(lines))
-    dev_test_rate = (1 - rate) / 2
-    train, test, dev = torch.utils.data.random_split(
-        lines, [rate, dev_test_rate, dev_test_rate])
+    lines = list(set(lines))  # deduplicate
+    total = len(lines)
 
-    train_file = open('Dataset/train.txt', 'w')
-    test_file = open('Dataset/test.txt', 'w')
-    dev_file = open('Dataset/dev.txt', 'w')
+    train_len = int(rate * total)
+    dev_test_len = (total - train_len) // 2
+    remainder = total - train_len - 2 * dev_test_len  # handle rounding
 
-    train_values = set([unicode_to_ascii(l)
-                       for l in train if len(unicode_to_ascii(l)) > 0])
-    test_values = set([unicode_to_ascii(l)
-                      for l in test if len(unicode_to_ascii(l)) > 0])
-    dev_values = set([unicode_to_ascii(l)
-                     for l in dev if len(unicode_to_ascii(l)) > 0])
+    split_lengths = [train_len, dev_test_len, dev_test_len + remainder]
+    train_subset, test_subset, dev_subset = torch.utils.data.random_split(
+        lines, split_lengths)
 
-    train_file.writelines(l for l in train_values)
-    test_file.writelines(l for l in test_values)
-    dev_file.writelines(l for l in dev_values)
+    def clean_subset(subset):
+        return [unicode_to_ascii(str(l)) for l in subset if len(unicode_to_ascii(str(l))) > 0]
 
-    train_file.close()
-    test_file.close()
-    dev_file.close()
+    train_values = clean_subset(train_subset)
+    test_values = clean_subset(test_subset)
+    dev_values = clean_subset(dev_subset)
+
+    with open(train_path, 'w') as train_file:
+        train_file.writelines(l + '\n' for l in train_values)
+    with open(test_path, 'w') as test_file:
+        test_file.writelines(l + '\n' for l in test_values)
+    with open(dev_path, 'w') as dev_file:
+        dev_file.writelines(l + '\n' for l in dev_values)
 
     return train_values, test_values, dev_values
 

@@ -3,6 +3,7 @@ import random
 import time
 from math import inf
 from os import path
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -46,24 +47,30 @@ def training(decoder: nn.Module, n_epochs, lines, hidden_size, n_layers, lr, mod
     print_every = max(1, n_epochs // 100)
 
     train_path = create_folder(n_layers, hidden_size, lr, n_epochs)
-    lines = random.sample(lines, 10000)
+    # lines = random.sample(lines, 100)
 
     for iter in range(1, n_epochs + 1):
         total_loss = 0
-        # Sample a random subset of lines for each epoch
-        # random_lines = random.sample(lines, 10)
+        progress = tqdm.tqdm(enumerate(
+            lines), desc=f"Epoch {iter}/{n_epochs}", total=len(lines), leave=False)
 
-        for index, line in tqdm.tqdm(enumerate(lines), desc="Training", total=len(lines)):
-            output, loss = train(decoder, input_tensor(
-                line).to(device), target_tensor(line).to(device), optimizer, criteron)
+        for index, line in progress:
+            output, loss = train(
+                decoder,
+                input_tensor(line).to(device),
+                target_tensor(line).to(device),
+                optimizer,
+                criteron
+            )
             total_loss += loss
+            avg_loss_so_far = total_loss / (index + 1)
+            progress.set_postfix({"avg_loss": f"{avg_loss_so_far:.4f}"})
 
         avg_loss = total_loss / len(lines)
         writer.add_scalar("Loss/train", avg_loss, iter)
 
         logging.info(f"Saved iteration {iter} with loss {avg_loss:.4f}")
-        torch.save(decoder.state_dict(), path.join(
-            train_path, "iterations/", f"{iter}.pt"))
+        torch.save(decoder.state_dict(), path.join(train_path, "iteration.pt"))
 
         if avg_loss < best_loss:
             best_loss = avg_loss
@@ -78,36 +85,43 @@ def training(decoder: nn.Module, n_epochs, lines, hidden_size, n_layers, lr, mod
     writer.close()
 
 
-def train(decoder: LSTMModel, input_line_tensor: Tensor, target_line_tensor: Tensor, optimizer, criteron):
+def train(
+    decoder: LSTMModel,
+    input_line_tensor: torch.Tensor,
+    target_line_tensor: torch.Tensor,
+    optimizer: torch.optim.Optimizer,
+    criterion: torch.nn.Module
+) -> Tuple[torch.Tensor, float]:
     """
-    Performs a single training step: computes the forward pass, calculates the loss, and updates the model.
+    Performs one training step: forward pass, loss computation, and backpropagation.
 
     Args:
-        decoder: The model being trained.
-        input_line_tensor (Tensor): The input data tensor.
-        target_line_tensor (Tensor): The target data tensor.
-        optimizer: The optimizer used to update the model.
+        decoder: The LSTMModel instance.
+        input_line_tensor (Tensor): Shape (seq_len, batch_size, input_dim)
+        target_line_tensor (Tensor): Shape (seq_len, batch_size)
+        optimizer: Optimizer used for training.
+        criterion: Loss function.
 
     Returns:
-        output: The model's output for the input data.
-        loss: The computed loss for the current input-target pair.
+        output: Final output tensor from the model.
+        loss: Scalar float loss value.
     """
     target_line_tensor = target_line_tensor.unsqueeze(
-        -1)  # Reshape target tensor for loss computation
-    hidden = decoder.init_hidden(input_line_tensor[0].size(0))
+        -1)  # Ensure shape (seq_len, batch_size, 1)
+    hidden = decoder.init_hidden(batch_size=input_line_tensor.size(1))
 
     decoder.zero_grad()
-    loss = torch.tensor(0.0, requires_grad=True).to(device)
+    loss = 0.0
     output = None
 
-    # Iterate through the input sequence
-    for i in range(input_line_tensor.size(0)):
+    seq_len = input_line_tensor.size(0)
+
+    for i in range(seq_len):
         output, hidden = decoder(input_line_tensor[i].unsqueeze(0), hidden)
-        l = criteron(output, target_line_tensor[i].to(device))
+        l = criterion(output, target_line_tensor[i].to(output.device))
         loss += l
 
     loss.backward()
     optimizer.step()
 
     return output, loss.item()
-    # return output, loss.item() / input_line_tensor.size(0)
