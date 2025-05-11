@@ -1,8 +1,8 @@
 data/*
 passwordGenEnv/*
 passwordEnv/*
-models/
-logs/
+models*
+logs*
 runs/*
 Dataset/*
 __pycache__/*

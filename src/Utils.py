@@ -308,7 +308,35 @@ def collate_fn(batch):
         inputs, batch_first=True, padding_value=pad_idx)
     targets_padded = pad_sequence(
         targets, batch_first=True, padding_value=pad_idx)
+
+    # Check if there are duplicate inputs within the batch
+    input_set = set(tuple(input_seq.tolist()) for input_seq in inputs_padded)
+    if len(input_set) != len(inputs_padded):
+        print("Warning: Duplicate sequences detected in batch!")
+
     return inputs_padded, targets_padded
+
+
+def check_overlap_between_batches(dataloader):
+    prev_batch = None
+    for batch_idx, (inputs, targets) in enumerate(dataloader):
+        if prev_batch is not None:
+            # Check if any sequence from the previous batch appears in the current batch
+            overlap = set(tuple(input_seq.tolist()) for input_seq in prev_batch).intersection(
+                set(tuple(input_seq.tolist()) for input_seq in inputs)
+            )
+            if overlap:
+                print(
+                    f"Overlap detected between batch {batch_idx-1} and batch {batch_idx}")
+        prev_batch = inputs  # Store current batch for next iteration
+
+
+def visualize_batches(dataloader):
+    for batch_idx, (inputs, targets) in enumerate(dataloader):
+        print(f"Batch {batch_idx}:")
+        for i, input_seq in enumerate(inputs):
+            print(f"Input sequence {i}: {input_seq.tolist()}")
+        print("\n")
 
 
 def generate_passwords(model, n, max_len=20):

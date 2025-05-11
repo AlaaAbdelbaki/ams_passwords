@@ -1,7 +1,7 @@
 $layers = @(2, 4, 6, 8, 10, 12)
 $hidden_size = @(64, 128, 256, 512)
 $learning_rate = @(0.001, 0.01, 0.1)
-$max_epochs = @(100, 300, 500)
+$max_epochs = @(10, 30, 50)
 
 
 foreach ($layer in $layers) {

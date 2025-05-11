@@ -18,7 +18,8 @@ from src.eval import evaluating
 from src.model import RNN, LSTMModel
 from src.test import testing
 from src.train import training
-from src.Utils import (check_matches, choose_model, collate_fn, extract_params,
+from src.Utils import (check_matches, check_overlap_between_batches,
+                       choose_model, collate_fn, extract_params,
                        generate_passwords, get_folder_path, get_lines,
                        get_mean_size)
 
@@ -94,6 +95,8 @@ def main():
     logging.info(f"Test set size: {len(test_set)}")
     logging.info(f"Dev set size: {len(dev_set)}")
 
+    print(str(args.ml))
+
     # Hyperparameters
     max_length = args.ml if args.ml > 0 else get_mean_size(train_set)
     learning_rate = args.learning_rate if args.learning_rate is not None else l_r
@@ -120,10 +123,11 @@ def main():
         model_path = path.join(get_folder_path(
             n_layers, hidden_size, learning_rate, max_epochs), 'model.pt')
         dataset = PasswordDataset(train_set)
-        dataloader = DataLoader(dataset, batch_size=16,
+        dataloader = DataLoader(dataset, batch_size=256,
                                 shuffle=True, collate_fn=collate_fn)
         optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
         criteron = nn.CrossEntropyLoss()
+        check_overlap_between_batches(dataloader)
         decoder.train()
         training(
             decoder,

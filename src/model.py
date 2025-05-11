@@ -201,7 +201,7 @@ class LSTMModel(nn.Module):
 
         # Fix: Set the LSTM input_size to embed_dim
         self.lstm = nn.LSTM(embed_dim, hidden_dim, layer_dim,
-                            batch_first=True)  # input_size = embed_dim
+                            batch_first=True, dropout=.2)  # input_size = embed_dim
         self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x, hidden=None):
