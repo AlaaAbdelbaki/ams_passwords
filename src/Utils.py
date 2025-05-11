@@ -401,7 +401,7 @@ def generate_passwords(model, n, max_len=20):
 
         # print(len(generated_passwords), password)
 
-    file = open(f"generated\chatgpt_{n}.txt", "w")
+    file = open(f"generated\output_{n}.txt", "w")
     file.writelines([f"{password}\n" for password in generated_passwords])
     file.close()
 

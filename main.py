@@ -14,7 +14,7 @@ from dataset_info import dataset_info, split_data
 from src import (FILENAME, MODEL_PATH, device, hidden_size_default, l_r,
                  max_epochs_default, n_layers_default, n_letters)
 from src.dataset import PasswordDataset
-from src.eval import evaluating
+from src.eval import evaluate_model, evaluating
 from src.model import RNN, LSTMModel
 from src.test import testing
 from src.train import training
@@ -144,17 +144,23 @@ def main():
         logging.info(f"Model saved at {model_path}")
 
     elif args.trainEval == "eval":
-        try:
-            model = choose_model()
-            num_layers, hidden, _, __, ___, ____ = extract_params(model)
-            decoder = LSTMModel(
-                n_letters, hidden, num_layers, n_letters,).to(device)
+        # try:
+        model = choose_model()
+        num_layers, hidden, _, __, ___, ____ = extract_params(model)
+        decoder = LSTMModel(
+            n_letters, hidden, num_layers, n_letters,).to(device)
+        dataset = PasswordDataset(dev_set)
+        dataloader = DataLoader(dataset,
+                                batch_size=128,
+                                collate_fn=collate_fn
+                                )
 
-            decoder.load_state_dict(torch.load(model))
-            decoder.to(device).eval()
-            evaluating(decoder, max_length)
-        except Exception as e:
-            logging.error(f"Failed to load model for evaluation: {e}")
+        decoder.load_state_dict(torch.load(model))
+        decoder.to(device).eval()
+        evaluating(decoder, max_length)
+        evaluate_model(decoder, dataloader)
+        # except Exception as e:
+        #     logging.error(f"Failed to load model for evaluation: {e}")
     elif args.trainEval == "test":
         try:
             model = choose_model()
